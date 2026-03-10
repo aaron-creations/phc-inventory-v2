@@ -1,23 +1,38 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
+import { ProtectedRoute, ManagerRoute, GuestRoute } from './components/ProtectedRoute'
+import LoginPage from './views/Login/LoginPage'
+import AccessPending from './views/Login/AccessPending'
 import Dashboard from './views/Dashboard/Dashboard'
 import LoggingFlow from './views/Logging/LoggingFlow'
 import StockView from './views/Stock/StockView'
 import MixRatesView from './views/MixRates/MixRatesView'
-import ManagerLogin from './views/Manager/ManagerLogin'
 import ManagerPanel from './views/Manager/ManagerPanel'
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-forest-950">
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/log/:techId" element={<LoggingFlow />} />
-        <Route path="/stock" element={<StockView />} />
-        <Route path="/mix-rates" element={<MixRatesView />} />
-        <Route path="/manager/login" element={<ManagerLogin />} />
-        <Route path="/manager/*" element={<ManagerPanel />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-forest-950">
+        <Routes>
+          {/* Guest-only (redirects away if already logged in) */}
+          <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+
+          {/* Authenticated but pending approval */}
+          <Route path="/access-pending" element={<AccessPending />} />
+
+          {/* Protected — any approved user (manager or technician) */}
+          <Route path="/"           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/log/:techId" element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
+          <Route path="/stock"      element={<ProtectedRoute><StockView /></ProtectedRoute>} />
+          <Route path="/mix-rates"  element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
+
+          {/* Manager-only */}
+          <Route path="/manager/*"  element={<ManagerRoute><ManagerPanel /></ManagerRoute>} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </AuthProvider>
   )
 }
