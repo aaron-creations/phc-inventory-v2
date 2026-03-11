@@ -49,12 +49,11 @@ export default function UsersSection() {
   }
 
   async function saveName(profileId) {
-    if (!editingName.trim()) { setEditingUserId(null); return }
+    if (!editingName.trim()) return
     setSaving(profileId)
     await supabase.from('user_profiles').update({ display_name: editingName.trim() }).eq('id', profileId)
     await load()
     setSaving(null)
-    setEditingUserId(null)
   }
 
   async function removeUser(authUserId, profileId) {
@@ -204,7 +203,6 @@ export default function UsersSection() {
         ) : approvedProfiles.map((p, i) => {
           const isMe = p.user_id === user?.id
           const isSaving = saving === p.id
-          const hasEmailLogin = p.auth_providers?.includes('email')
 
           return (
             <div
@@ -217,34 +215,11 @@ export default function UsersSection() {
                   {(p.display_name || p.user_id)?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 group">
-                    {editingUserId === p.id ? (
-                      <input
-                        autoFocus
-                        value={editingName}
-                        onChange={e => setEditingName(e.target.value)}
-                        onBlur={() => saveName(p.id)}
-                        onKeyDown={e => e.key === 'Enter' && saveName(p.id)}
-                        className="bg-forest-800 border border-brand-green/30 rounded px-2 py-0.5 text-white text-sm outline-none w-48 focus:border-brand-green/70 transition-colors"
-                      />
-                    ) : (
-                      <>
-                        <p className="text-white text-sm font-medium truncate">
-                          {p.display_name || <span className="text-white/30 italic">No name set</span>}
-                          {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
-                        </p>
-                        {/* Edit Button */}
-                        <button 
-                          onClick={() => { setEditingUserId(p.id); setEditingName(p.display_name || '') }}
-                          className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white transition-opacity"
-                          title="Edit name"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                      </>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <p className="text-white text-sm font-medium truncate">
+                      {p.display_name || <span className="text-white/30 italic">No name set</span>}
+                      {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
+                    </p>
                     {/* Auth Providers Badges */}
                     {p.auth_providers?.map(provider => (
                       <span key={provider} className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50 border border-white/10 uppercase tracking-wide">
@@ -253,72 +228,25 @@ export default function UsersSection() {
                     ))}
                   </div>
                   
-                  <div className="flex flex-col gap-0.5 mt-0.5">
-                    {p.technicians && (
-                      <p className="text-white/30 text-xs">
-                        Linked: {p.technicians.first_name} {p.technicians.last_initial}.
-                      </p>
-                    )}
-                    <p className="text-white/30 text-xs">
-                      Last activity: {p.last_sign_in_at ? format(new Date(p.last_sign_in_at), 'MMM d, yyyy h:mm a') : 'Never'}
-                    </p>
-                  </div>
+                  <p className="text-white/30 text-xs mt-0.5">
+                    Last activity: {p.last_sign_in_at ? format(new Date(p.last_sign_in_at), 'MMM d, yyyy h:mm a') : 'Never'}
+                  </p>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex flex-col gap-1.5 items-center justify-center">
-                {!isMe && hasEmailLogin && p.display_name?.includes('@') && (
-                  <button
-                    onClick={() => sendPasswordReset(p.display_name)}
-                    className="w-full text-white/30 hover:text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/5 text-center"
-                    title="Force a password reset email"
-                  >
-                    Reset Pwd
-                  </button>
-                )}
-                {!isMe && (
-                  <button
-                    onClick={() => removeUser(p.user_id, p.id)}
-                    className="w-full text-red-400/50 hover:text-red-400 text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-red-500/5 hover:bg-red-500/10 transition-colors border border-red-500/10 text-center"
-                    title="Permanently delete user"
-                  >
-                    Delete
-                  </button>
-                )}
+              {/* Actions & Role */}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {isSaving === p.id && <span className="text-white/30 text-xs animate-pulse">Saving…</span>}
+                <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${roleColors[p.role] || 'bg-white/10 text-white/50'}`}>
+                  {p.role}
+                </span>
+                <button
+                  onClick={() => { setEditingUserId(p.id); setEditingName(p.display_name || '') }}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition-colors border border-white/10"
+                >
+                  Edit
+                </button>
               </div>
-
-              {/* Role selector */}
-              <select
-                value={p.role}
-                disabled={isSaving || isMe}
-                onChange={e => updateRole(p.id, e.target.value)}
-                className="bg-forest-800 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none disabled:opacity-40 cursor-pointer"
-              >
-                <option value="technician">Technician</option>
-                <option value="manager">Manager</option>
-              </select>
-
-              {/* Technician link */}
-              <select
-                value={p.technician_id || ''}
-                disabled={isSaving}
-                onChange={e => linkTechnician(p.id, e.target.value)}
-                className="bg-forest-800 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none disabled:opacity-40 cursor-pointer"
-              >
-                <option value="">No tech link</option>
-                {technicians.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.first_name} {t.last_initial ? `${t.last_initial}.` : ''}
-                  </option>
-                ))}
-              </select>
-
-              {/* Saving indicator */}
-              {isSaving && <span className="text-white/30 text-xs animate-pulse">Saving…</span>}
-              <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${roleColors[p.role] || 'bg-white/10 text-white/50'}`}>
-                {p.role}
-              </span>
             </div>
           )
         })}
@@ -382,6 +310,108 @@ export default function UsersSection() {
           </a>
         </p>
       </div>
+
+      {/* ── Edit User Modal ────────────────────────────────────────────── */}
+      {editingUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/80 backdrop-blur-sm">
+          {(() => {
+            const p = profiles.find(pr => pr.id === editingUserId)
+            if (!p) return null
+            const isMe = p.user_id === user?.id
+            const hasEmailLogin = p.auth_providers?.includes('email')
+
+            return (
+              <div className="bg-forest-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                  <h3 className="text-white font-bold text-lg">Manage User</h3>
+                  <button onClick={() => setEditingUserId(null)} className="text-white/40 hover:text-white transition-colors">
+                    ✕
+                  </button>
+                </div>
+                <div className="p-6 flex flex-col gap-6">
+                  
+                  {/* Display Name Edit */}
+                  <div>
+                    <label className="text-white/40 text-xs mb-1.5 block">Display Name</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={editingName}
+                        onChange={e => setEditingName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveName(p.id)}
+                        className="flex-1 bg-forest-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50 transition-colors"
+                      />
+                      <button
+                        onClick={() => saveName(p.id)}
+                        disabled={saving === p.id}
+                        className="bg-brand-green/20 text-brand-green hover:bg-brand-green/30 px-3 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                      >
+                        {saving === p.id ? 'Saving...' : 'Save Name'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Role & Tech Link */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-white/40 text-xs mb-1.5 block">Role</label>
+                      <select
+                        value={p.role}
+                        disabled={saving === p.id || isMe}
+                        onChange={e => updateRole(p.id, e.target.value)}
+                        className="w-full bg-forest-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none disabled:opacity-40 cursor-pointer"
+                      >
+                        <option value="technician">Technician</option>
+                        <option value="manager">Manager</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-white/40 text-xs mb-1.5 block">Linked Technician</label>
+                      <select
+                        value={p.technician_id || ''}
+                        disabled={saving === p.id}
+                        onChange={e => linkTechnician(p.id, e.target.value)}
+                        className="w-full bg-forest-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none disabled:opacity-40 cursor-pointer"
+                      >
+                        <option value="">No tech link</option>
+                        {technicians.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.first_name} {t.last_initial ? `${t.last_initial}.` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Danger Zone */}
+                  <div className="border-t border-white/5 pt-4 mt-2">
+                    <label className="text-white/40 text-xs mb-3 block tracking-wider uppercase font-semibold">Danger Zone</label>
+                    <div className="flex flex-col gap-2">
+                      {!isMe && hasEmailLogin && p.display_name?.includes('@') && (
+                        <button
+                          onClick={() => { sendPasswordReset(p.display_name); setEditingUserId(null) }}
+                          className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-sm transition-colors"
+                        >
+                          Send Password Reset Email
+                        </button>
+                      )}
+                      {!isMe && (
+                        <button
+                          onClick={() => removeUser(p.user_id, p.id)}
+                          className="w-full text-left px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors"
+                        >
+                          Permanently Delete User
+                        </button>
+                      )}
+                      {isMe && <p className="text-white/30 text-xs italic">You cannot reset your password or delete your own account from here.</p>}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
     </div>
   )
 }
