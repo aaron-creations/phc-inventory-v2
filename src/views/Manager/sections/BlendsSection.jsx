@@ -125,7 +125,7 @@ export default function BlendsSection() {
  *   oz   = 1   fl oz (already fl oz)
  *   liter= 33.814 fl oz
  */
-const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, liter: 33.814 }
+const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, 'fl oz': 1, liter: 33.814 }
 
 function componentCost(bc) {
   const p = bc.products
@@ -345,8 +345,7 @@ function EditBlendModal({ blend, onClose, onSaved }) {
                 >
                   {c.toUpperCase()}
                 </button>
-              ))}
-            </div>
+              </div>
           </div>
 
           <div>
