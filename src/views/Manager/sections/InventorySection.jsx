@@ -116,19 +116,23 @@ function ProductModal({ product, onClose, onSaved }) {
     treatsTotal = (totalFlOz / mRate) * mPer
   }
 
-  // 4. Cost per fl oz
-  // If container cost and container size > 0
-  let costPerFlOz = null
+  // 4. Cost per Verify Unit
+  let costPerVerifyUnit = null
+  let verifyUnitLabel = form.container_unit || 'unit'
+  
   if (cCost > 0 && cSize > 0) {
-    let flOzPerContainer = 0
-    if (form.container_unit === 'gal') flOzPerContainer = cSize * 128
-    else if (form.container_unit === 'qt') flOzPerContainer = cSize * 32
-    else if (form.container_unit === 'pint') flOzPerContainer = cSize * 16
-    else if (form.container_unit === 'liter') flOzPerContainer = cSize * 33.814
-    else if (form.container_unit === 'oz' || form.container_unit === 'fl oz') flOzPerContainer = cSize
-
-    if (flOzPerContainer > 0) {
-      costPerFlOz = cCost / flOzPerContainer
+    if (form.unit_type === 'mixed' && totalFlOz > 0) {
+      verifyUnitLabel = 'fl oz'
+      let flOzPerContainer = 0
+      if (form.container_unit === 'gal') flOzPerContainer = cSize * 128
+      else if (form.container_unit === 'qt') flOzPerContainer = cSize * 32
+      else if (form.container_unit === 'pint') flOzPerContainer = cSize * 16
+      else if (form.container_unit === 'liter') flOzPerContainer = cSize * 33.814
+      else if (form.container_unit === 'oz' || form.container_unit === 'fl oz') flOzPerContainer = cSize
+      
+      if (flOzPerContainer > 0) costPerVerifyUnit = cCost / flOzPerContainer
+    } else {
+      costPerVerifyUnit = cCost / cSize
     }
   }
 
@@ -297,7 +301,7 @@ function ProductModal({ product, onClose, onSaved }) {
             <div className="flex items-center gap-2">
               <span>📦</span> {cStock.toLocaleString(undefined, { maximumFractionDigits: 5 })} containers × {cSize} {form.container_unit} = <span className="text-brand-green">{(totalOriginalVolume).toLocaleString(undefined, { maximumFractionDigits: 2 })} {form.container_unit}</span>
             </div>
-            {totalFlOz > 0 && (
+            {form.unit_type === 'mixed' && totalFlOz > 0 && (
               <div className="flex items-center gap-2">
                 <span>🔄</span> <span className="text-brand-green">{totalFlOz.toLocaleString(undefined, { maximumFractionDigits: 0 })} fl oz</span> of concentrate
               </div>
@@ -312,9 +316,9 @@ function ProductModal({ product, onClose, onSaved }) {
                 <span>🌿</span> Treats <span className="text-brand-green">~{treatsTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} gal</span> total
               </div>
             )}
-            {costPerFlOz !== null && (
+            {costPerVerifyUnit !== null && (
               <div className="flex items-center gap-2">
-                <span>💰</span> Cost per fl oz: <span className="text-brand-green">${costPerFlOz.toFixed(2)}</span>
+                <span>💰</span> Cost per {verifyUnitLabel}: <span className="text-brand-green">${costPerVerifyUnit.toFixed(2)}</span>
               </div>
             )}
             <div className="flex items-center gap-2">
