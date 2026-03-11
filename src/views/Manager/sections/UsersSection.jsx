@@ -8,6 +8,8 @@ export default function UsersSection() {
   const [technicians, setTechnicians] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(null)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [editingName, setEditingName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('technician')
   const [inviting, setInviting] = useState(false)
@@ -44,6 +46,26 @@ export default function UsersSection() {
         body: { email: p.email, name: p.display_name?.split('@')[0] }
       }).catch(err => console.error('Failed to send approval email:', err))
     }
+  }
+
+  async function saveName(profileId) {
+    if (!editingName.trim()) { setEditingUserId(null); return }
+    setSaving(profileId)
+    await supabase.from('user_profiles').update({ display_name: editingName.trim() }).eq('id', profileId)
+    await load()
+    setSaving(null)
+    setEditingUserId(null)
+  }
+
+  async function removeUser(authUserId, profileId) {
+    if (!confirm('PERMANENTLY DELETE this user? This cannot be undone.')) return
+    setSaving(profileId)
+    const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
+    if (error) {
+      alert(`Error deleting user: ${error.message}`)
+    }
+    await load()
+    setSaving(null)
   }
 
   async function approveUser(profileId) {
@@ -195,11 +217,34 @@ export default function UsersSection() {
                   {(p.display_name || p.user_id)?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-white text-sm font-medium truncate">
-                      {p.display_name || <span className="text-white/30 italic">No name set</span>}
-                      {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
-                    </p>
+                  <div className="flex items-center gap-2 group">
+                    {editingUserId === p.id ? (
+                      <input
+                        autoFocus
+                        value={editingName}
+                        onChange={e => setEditingName(e.target.value)}
+                        onBlur={() => saveName(p.id)}
+                        onKeyDown={e => e.key === 'Enter' && saveName(p.id)}
+                        className="bg-forest-800 border border-brand-green/30 rounded px-2 py-0.5 text-white text-sm outline-none w-48 focus:border-brand-green/70 transition-colors"
+                      />
+                    ) : (
+                      <>
+                        <p className="text-white text-sm font-medium truncate">
+                          {p.display_name || <span className="text-white/30 italic">No name set</span>}
+                          {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
+                        </p>
+                        {/* Edit Button */}
+                        <button 
+                          onClick={() => { setEditingUserId(p.id); setEditingName(p.display_name || '') }}
+                          className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white transition-opacity"
+                          title="Edit name"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                     {/* Auth Providers Badges */}
                     {p.auth_providers?.map(provider => (
                       <span key={provider} className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50 border border-white/10 uppercase tracking-wide">
@@ -221,16 +266,27 @@ export default function UsersSection() {
                 </div>
               </div>
 
-              {/* Password Reset Action */}
-              {!isMe && hasEmailLogin && p.display_name?.includes('@') && (
-                <button
-                  onClick={() => sendPasswordReset(p.display_name)}
-                  className="text-white/30 hover:text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/5"
-                  title="Force a password reset email"
-                >
-                  Reset Pwd
-                </button>
-              )}
+              {/* Actions */}
+              <div className="flex flex-col gap-1.5 items-center justify-center">
+                {!isMe && hasEmailLogin && p.display_name?.includes('@') && (
+                  <button
+                    onClick={() => sendPasswordReset(p.display_name)}
+                    className="w-full text-white/30 hover:text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/5 text-center"
+                    title="Force a password reset email"
+                  >
+                    Reset Pwd
+                  </button>
+                )}
+                {!isMe && (
+                  <button
+                    onClick={() => removeUser(p.user_id, p.id)}
+                    className="w-full text-red-400/50 hover:text-red-400 text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-red-500/5 hover:bg-red-500/10 transition-colors border border-red-500/10 text-center"
+                    title="Permanently delete user"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
 
               {/* Role selector */}
               <select
