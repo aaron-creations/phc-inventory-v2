@@ -71,10 +71,10 @@ export default function UsersSection() {
     await updateRole(profileId, 'technician')
   }
 
-  async function denyUser(profileId) {
+  async function denyUser(authUserId, profileId) {
     if (!confirm('Remove this user from the system? They will need to request access again.')) return
     setSaving(profileId)
-    const { error } = await supabase.rpc('delete_user', { target_user_id: profileId })
+    const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
     if (error) {
       alert(`Error denying user: ${error.message}`)
     }
@@ -173,7 +173,7 @@ export default function UsersSection() {
                         ✓ Approve
                       </button>
                       <button
-                        onClick={() => denyUser(p.id)}
+                        onClick={() => denyUser(p.user_id, p.id)}
                         className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-semibold hover:bg-red-500/20 transition-all"
                       >
                         ✕ Deny
