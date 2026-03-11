@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 
 /* ─── helpers ─────────────────────────────────────────── */
@@ -383,6 +383,7 @@ export default function InventorySection() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
+  const [sortConfig, setSortConfig] = useState(null)
   
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -395,12 +396,74 @@ export default function InventorySection() {
 
   useEffect(() => { loadProducts() }, [loadProducts])
 
-  const filtered = products.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-                        (p.category ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = !statusFilter || getStatus(p) === statusFilter
-    return matchSearch && matchStatus
-  })
+  const handleSort = (key) => {
+    let direction = 'asc'
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
+      setSortConfig(null)
+      return
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const processedProducts = useMemo(() => {
+    let result = products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+                          (p.category ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchStatus = !statusFilter || getStatus(p) === statusFilter
+      return matchSearch && matchStatus
+    })
+
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        let aValue, bValue
+        switch (sortConfig.key) {
+          case 'name':
+            aValue = a.name.toLowerCase()
+            bValue = b.name.toLowerCase()
+            break
+          case 'status':
+            const getStatusScore = (p) => {
+              const s = getStatus(p)
+              if (s === 'out') return 0
+              if (s === 'low') return 1
+              return 2
+            }
+            aValue = getStatusScore(a)
+            bValue = getStatusScore(b)
+            break
+          case 'containers':
+            aValue = a.containers_in_stock
+            bValue = b.containers_in_stock
+            break
+          case 'volume':
+            aValue = a.containers_in_stock * a.container_size
+            bValue = b.containers_in_stock * b.container_size
+            break
+          case 'mix_rate':
+            aValue = a.mix_rate || ''
+            bValue = b.mix_rate || ''
+            break
+          case 'cost':
+            aValue = a.cost_per_container || 0
+            bValue = b.cost_per_container || 0
+            break
+          case 'value':
+            aValue = a.containers_in_stock * (a.cost_per_container || 0)
+            bValue = b.containers_in_stock * (b.cost_per_container || 0)
+            break
+          default:
+            aValue = 0; bValue = 0
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+    return result
+  }, [products, search, statusFilter, sortConfig])
 
   const counts = {
     ok:  products.filter(p => getStatus(p) === 'ok').length,
@@ -420,7 +483,7 @@ export default function InventorySection() {
             <span className="text-brand-green text-sm font-bold">${totalValue.toFixed(2)}</span>
           </div>
           <button
-            onClick={() => exportCSV(filtered)}
+            onClick={() => exportCSV(processedProducts)}
             className="glass rounded-lg px-3 py-1.5 text-white/50 hover:text-brand-green text-xs font-medium transition-colors flex items-center gap-1.5"
           >
             ⬇ Export CSV
@@ -475,13 +538,27 @@ export default function InventorySection() {
         <table className="w-full min-w-[900px]">
           <thead className="bg-[#f0ece1]/5">
             <tr className="border-b border-white/10 uppercase tracking-widest text-[10px] text-white/40">
-              <th className="text-left font-bold px-5 py-4 min-w-[220px]">PRODUCT</th>
-              <th className="text-left font-bold px-4 py-4 min-w-[120px]">STOCK STATUS</th>
-              <th className="text-left font-bold px-4 py-4">CONTAINERS</th>
-              <th className="text-left font-bold px-4 py-4">TOTAL VOLUME</th>
-              <th className="text-left font-bold px-4 py-4">MIX RATE</th>
-              <th className="text-left font-bold px-4 py-4">COST/CONTAINER</th>
-              <th className="text-left font-bold px-4 py-4">TOTAL VALUE</th>
+              <th onClick={() => handleSort('name')} className="text-left font-bold px-5 py-4 min-w-[220px] cursor-pointer hover:text-white transition-colors group select-none">
+                PRODUCT {sortConfig?.key === 'name' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('status')} className="text-left font-bold px-4 py-4 min-w-[120px] cursor-pointer hover:text-white transition-colors group select-none">
+                STOCK STATUS {sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('containers')} className="text-left font-bold px-4 py-4 cursor-pointer hover:text-white transition-colors group select-none whitespace-nowrap">
+                CONTAINERS {sortConfig?.key === 'containers' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('volume')} className="text-left font-bold px-4 py-4 cursor-pointer hover:text-white transition-colors group select-none whitespace-nowrap">
+                TOTAL VOLUME {sortConfig?.key === 'volume' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('mix_rate')} className="text-left font-bold px-4 py-4 cursor-pointer hover:text-white transition-colors group select-none whitespace-nowrap">
+                MIX RATE {sortConfig?.key === 'mix_rate' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('cost')} className="text-left font-bold px-4 py-4 cursor-pointer hover:text-white transition-colors group select-none whitespace-nowrap">
+                COST/CONTAINER {sortConfig?.key === 'cost' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
+              <th onClick={() => handleSort('value')} className="text-left font-bold px-4 py-4 cursor-pointer hover:text-white transition-colors group select-none whitespace-nowrap">
+                TOTAL VALUE {sortConfig?.key === 'value' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : <span className="opacity-0 group-hover:opacity-50">↕</span>}
+              </th>
               <th className="px-4 py-4 w-24"></th>
             </tr>
           </thead>
@@ -492,11 +569,11 @@ export default function InventorySection() {
                   <td colSpan={8} className="px-5 py-4"><div className="h-4 bg-white/5 rounded animate-pulse" /></td>
                 </tr>
               ))
-            ) : filtered.length === 0 ? (
+            ) : processedProducts.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-white/30 text-sm">No products match your search.</td>
               </tr>
-            ) : filtered.map((p, i) => {
+            ) : processedProducts.map((p, i) => {
               const status = getStatus(p)
               const meta = statusMeta[status]
               const pct = stockPercent(p)
