@@ -77,6 +77,18 @@ export default function UsersSection() {
     setInviting(false)
   }
 
+  async function sendPasswordReset(email) {
+    if (!confirm(`Send a password reset email to ${email}?`)) return
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    })
+    if (error) {
+      alert(`Error sending reset email: ${error.message}`)
+    } else {
+      alert(`Password reset email sent to ${email}`)
+    }
+  }
+
   const roleColors = {
     manager:    'bg-brand-green/15 text-brand-green border-brand-green/25',
     technician: 'bg-brand-blue/15 text-brand-blue border-brand-blue/25',
@@ -160,6 +172,8 @@ export default function UsersSection() {
         ) : approvedProfiles.map((p, i) => {
           const isMe = p.user_id === user?.id
           const isSaving = saving === p.id
+          const hasEmailLogin = p.auth_providers?.includes('email')
+
           return (
             <div
               key={p.id}
@@ -171,10 +185,19 @@ export default function UsersSection() {
                   {(p.display_name || p.user_id)?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-white text-sm font-medium truncate">
-                    {p.display_name || <span className="text-white/30 italic">No name set</span>}
-                    {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-white text-sm font-medium truncate">
+                      {p.display_name || <span className="text-white/30 italic">No name set</span>}
+                      {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
+                    </p>
+                    {/* Auth Providers Badges */}
+                    {p.auth_providers?.map(provider => (
+                      <span key={provider} className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50 border border-white/10 uppercase tracking-wide">
+                        {provider}
+                      </span>
+                    ))}
+                  </div>
+                  
                   <div className="flex flex-col gap-0.5 mt-0.5">
                     {p.technicians && (
                       <p className="text-white/30 text-xs">
@@ -182,11 +205,22 @@ export default function UsersSection() {
                       </p>
                     )}
                     <p className="text-white/30 text-xs">
-                      Last logged in: {p.last_sign_in_at ? format(new Date(p.last_sign_in_at), 'MMM d, yyyy h:mm a') : 'Never'}
+                      Last activity: {p.last_sign_in_at ? format(new Date(p.last_sign_in_at), 'MMM d, yyyy h:mm a') : 'Never'}
                     </p>
                   </div>
                 </div>
               </div>
+
+              {/* Password Reset Action */}
+              {!isMe && hasEmailLogin && p.display_name?.includes('@') && (
+                <button
+                  onClick={() => sendPasswordReset(p.display_name)}
+                  className="text-white/30 hover:text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/5"
+                  title="Force a password reset email"
+                >
+                  Reset Pwd
+                </button>
+              )}
 
               {/* Role selector */}
               <select
