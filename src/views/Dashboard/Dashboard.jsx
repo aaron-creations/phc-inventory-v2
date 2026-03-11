@@ -6,21 +6,30 @@ import { useAuth } from '../../contexts/AuthContext'
 import LowStockBanner from '../../components/LowStockBanner'
 
 export default function Dashboard() {
-  const [technicians, setTechnicians] = useState([])
   const [blends, setBlends] = useState([])
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-  const { isManager, signOut, user } = useAuth()
+  const { isManager, isTechnician, signOut, profile } = useAuth()
+
+  // Derive display name from linked technician or email
+  const tech = profile?.technicians
+  const displayName = tech
+    ? `${tech.first_name} ${tech.last_initial}.`
+    : profile?.email?.split('@')[0] ?? 'Manager'
+
+  const initials = tech
+    ? tech.first_name[0]
+    : (profile?.email?.[0] ?? 'M').toUpperCase()
+
+  const avatarColor = tech?.color_hex ?? '#4ade80'
 
   useEffect(() => {
     async function loadData() {
-      const [techRes, blendRes, prodRes] = await Promise.all([
-        supabase.from('technicians').select('*').order('first_name'),
+      const [blendRes, prodRes] = await Promise.all([
         supabase.from('blends').select('*').order('name'),
         supabase.from('products').select('id, name, containers_in_stock, low_stock_threshold').order('name'),
       ])
-      setTechnicians(techRes.data || [])
       setBlends(blendRes.data || [])
       setProducts(prodRes.data || [])
       setLoading(false)
@@ -37,7 +46,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-forest-950 flex flex-col items-center px-4 py-10 max-w-lg mx-auto">
 
-      {/* Header — sign out only */}
+      {/* Header — sign out */}
       <div className="w-full flex items-center justify-end mb-4">
         <button
           onClick={signOut}
@@ -86,39 +95,48 @@ export default function Dashboard() {
       {/* Low-Stock Alert */}
       {!loading && <LowStockBanner products={products} compact />}
 
-      {/* Who's Logging */}
-      <p className="text-white/40 text-xs font-semibold tracking-[0.15em] uppercase mb-3 self-start">
-        Who's Logging?
-      </p>
+      {/* Logged-in user identity card */}
+      <div className="w-full glass rounded-2xl p-4 flex items-center gap-4 mb-6">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center text-forest-950 font-bold text-xl flex-shrink-0"
+          style={{ backgroundColor: avatarColor }}
+        >
+          {initials}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-white font-semibold text-base leading-tight">{displayName}</span>
+          <span className="text-white/40 text-xs">
+            {isManager ? 'Manager' : 'Technician'} · Logged in
+          </span>
+        </div>
+      </div>
 
-      <div className="w-full flex flex-col gap-2 mb-10">
-        {loading ? (
-          <div className="h-16 rounded-xl bg-white/5 animate-pulse w-full" />
-        ) : technicians.length === 0 ? (
-          <p className="text-white/30 text-sm text-center py-6">No technicians added yet.</p>
-        ) : (
-          technicians.map(tech => (
-            <button
-              key={tech.id}
-              onClick={() => navigate(`/log/${tech.id}`)}
-              className="w-full flex items-center gap-4 px-4 py-4 rounded-xl glass hover:bg-white/10 transition-all duration-200 group"
-            >
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-forest-950 font-bold text-lg flex-shrink-0"
-                style={{ backgroundColor: tech.color_hex }}
-              >
-                {tech.first_name[0]}
-              </div>
-              <span className="text-white font-medium flex-1 text-left">
-                {tech.first_name} {tech.last_initial}.
-              </span>
-              <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
-            </button>
-          ))
+      {/* Primary Action Buttons */}
+      <div className="w-full flex flex-col gap-3 mb-10">
+        {/* Log Usage — available to all approved users */}
+        <button
+          onClick={() => navigate('/log')}
+          className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-green/10 border border-brand-green/30 hover:bg-brand-green/20 hover:border-brand-green/60 transition-all duration-200 group"
+        >
+          <span className="text-2xl">🧪</span>
+          <span className="text-brand-green font-semibold text-base flex-1 text-left">Log Usage</span>
+          <span className="text-brand-green/40 group-hover:text-brand-green/80 transition-colors">→</span>
+        </button>
+
+        {/* Log Restock — manager only */}
+        {isManager && (
+          <button
+            onClick={() => navigate('/restock')}
+            className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-orange/10 border border-brand-orange/30 hover:bg-brand-orange/20 hover:border-brand-orange/60 transition-all duration-200 group"
+          >
+            <span className="text-2xl">📦</span>
+            <span className="text-brand-orange font-semibold text-base flex-1 text-left">Log Restock</span>
+            <span className="text-brand-orange/40 group-hover:text-brand-orange/80 transition-colors">→</span>
+          </button>
         )}
       </div>
 
-      {/* Bottom Navigation — Manager button gated to manager role */}
+      {/* Bottom Navigation */}
       <div className={`w-full grid gap-3 ${isManager ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <NavButton icon="📦" label="Stock" onClick={() => navigate('/stock')} />
         <NavButton icon="📋" label="Mix Rates" onClick={() => navigate('/mix-rates')} />

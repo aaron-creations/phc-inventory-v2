@@ -5,6 +5,7 @@ import LoginPage from './views/Login/LoginPage'
 import AccessPending from './views/Login/AccessPending'
 import Dashboard from './views/Dashboard/Dashboard'
 import LoggingFlow from './views/Logging/LoggingFlow'
+import RestockFlow from './views/Logging/RestockFlow'
 import StockView from './views/Stock/StockView'
 import MixRatesView from './views/MixRates/MixRatesView'
 import ManagerPanel from './views/Manager/ManagerPanel'
@@ -22,12 +23,13 @@ export default function App() {
 
           {/* Protected — any approved user (manager or technician) */}
           <Route path="/"           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/log/:techId" element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
+          <Route path="/log"        element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
           <Route path="/stock"      element={<ProtectedRoute><StockView /></ProtectedRoute>} />
           <Route path="/mix-rates"  element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
 
           {/* Manager-only */}
-          <Route path="/manager/*"  element={<ManagerRoute><ManagerPanel /></ManagerRoute>} />
+          <Route path="/restock"   element={<ManagerRoute><RestockFlow /></ManagerRoute>} />
+          <Route path="/manager/*" element={<ManagerRoute><ManagerPanel /></ManagerRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
