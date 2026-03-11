@@ -74,7 +74,10 @@ export default function UsersSection() {
   async function denyUser(profileId) {
     if (!confirm('Remove this user from the system? They will need to request access again.')) return
     setSaving(profileId)
-    await supabase.from('user_profiles').delete().eq('id', profileId)
+    const { error } = await supabase.rpc('delete_user', { target_user_id: profileId })
+    if (error) {
+      alert(`Error denying user: ${error.message}`)
+    }
     await load()
     setSaving(null)
   }

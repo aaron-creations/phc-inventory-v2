@@ -8,7 +8,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isSignUp, setIsSignUp] = useState(false)
   const navigate = useNavigate()
   const { session } = useAuth()
 
@@ -28,10 +30,28 @@ export default function LoginPage() {
 
   async function handleEmailLogin(e) {
     e.preventDefault()
-    setError(''); setLoading(true)
+    setError(''); setSuccessMsg(''); setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) setError(error.message)
+  }
+
+  async function handleEmailSignUp(e) {
+    e.preventDefault()
+    setError(''); setSuccessMsg(''); setLoading(true)
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/` }
+    })
+    setLoading(false)
+    if (error) {
+      setError(error.message)
+    } else {
+      setSuccessMsg('Request submitted! A manager will review your account.')
+      // Supabase auto-logs them in if email confirmations are disabled (which they might be).
+      // If logged in, the session starts, profile is pending, and they get routed to /access-pending.
+    }
   }
 
   return (
@@ -137,11 +157,15 @@ export default function LoginPage() {
 
           {mode === 'email' && (
             <>
-              <h2 className="font-serif text-3xl font-bold text-white mb-1">Email sign in</h2>
-              <p className="text-white/40 text-sm mb-6">Enter your email to continue.</p>
+              <h2 className="font-serif text-3xl font-bold text-white mb-1">
+                {isSignUp ? 'Request Access' : 'Email sign in'}
+              </h2>
+              <p className="text-white/40 text-sm mb-6">
+                {isSignUp ? 'Create an account to request access.' : 'Enter your email to continue.'}
+              </p>
 
               <button
-                onClick={() => { setMode('options'); setError('') }}
+                onClick={() => { setMode('options'); setError(''); setSuccessMsg(''); setIsSignUp(false) }}
                 className="flex items-center gap-1.5 text-white/40 hover:text-white text-xs mb-6 transition-colors"
               >
                 ← Back
@@ -159,8 +183,8 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* Password login */}
-              <form onSubmit={handleEmailLogin} className="mb-2">
+              {/* Password login / Signup */}
+              <form onSubmit={isSignUp ? handleEmailSignUp : handleEmailLogin} className="mb-2">
                 <div className="mb-3">
                   <label className="text-white/40 text-xs mb-1.5 block">Password</label>
                   <input
@@ -172,14 +196,28 @@ export default function LoginPage() {
                   />
                 </div>
                 {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
+                {successMsg && <p className="text-brand-green text-xs mb-2">{successMsg}</p>}
                 <button
                   type="submit"
-                  disabled={loading || !email}
+                  disabled={loading || !email || !password}
                   className="w-full py-3 rounded-xl bg-brand-green text-forest-950 font-semibold text-sm disabled:opacity-40 hover:bg-brand-green/90 transition-all"
                 >
-                  {loading ? 'Signing in…' : 'Sign In with Password'}
+                  {loading 
+                    ? (isSignUp ? 'Requesting…' : 'Signing in…') 
+                    : (isSignUp ? 'Request Access' : 'Sign In with Password')}
                 </button>
               </form>
+
+              {/* Toggle Sign Up / Sign In */}
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccessMsg(''); }}
+                  className="text-white/40 hover:text-white text-xs transition-colors"
+                >
+                  {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Request access"}
+                </button>
+              </div>
 
             </>
           )}
