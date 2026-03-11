@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
-import { useAuth } from '../../contexts/AuthContext'
 
 /* ─── helpers ────────────────────────────────────── */
 function getStatus(p) {
@@ -55,163 +54,13 @@ function exportCSV(products) {
   URL.revokeObjectURL(url)
 }
 
-/* ─── Edit Modal ────────────────────────────────── */
-function EditModal({ product, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    name: product.name,
-    category: product.category ?? '',
-    containers_in_stock: product.containers_in_stock,
-    container_size: product.container_size,
-    container_unit: product.container_unit,
-    mix_rate: product.mix_rate ?? '',
-    cost_per_container: product.cost_per_container ?? '',
-    low_stock_threshold: product.low_stock_threshold,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  function set(field, value) {
-    setForm(prev => ({ ...prev, [field]: value }))
-  }
-
-  async function handleSave() {
-    setSaving(true)
-    setError(null)
-    const { error } = await supabase.from('products').update({
-      name: form.name.trim(),
-      category: form.category.trim() || null,
-      containers_in_stock: parseFloat(form.containers_in_stock) || 0,
-      container_size: parseFloat(form.container_size) || 0,
-      container_unit: form.container_unit.trim(),
-      mix_rate: form.mix_rate.trim() || null,
-      cost_per_container: form.cost_per_container !== '' ? parseFloat(form.cost_per_container) : null,
-      low_stock_threshold: parseFloat(form.low_stock_threshold) || 1,
-    }).eq('id', product.id)
-
-    if (error) { setError(error.message); setSaving(false); return }
-    onSaved()
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Sheet */}
-      <div className="relative w-full max-w-lg bg-forest-900 border border-white/10 rounded-t-3xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto z-10">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-white font-bold text-lg">Edit Product</h2>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl leading-none">✕</button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Product Name</label>
-            <input value={form.name} onChange={e => set('name', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Category</label>
-            <input value={form.category} onChange={e => set('category', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Containers in Stock</label>
-            <input type="number" step="0.01" value={form.containers_in_stock} onChange={e => set('containers_in_stock', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Low Stock Threshold</label>
-            <input type="number" step="0.5" value={form.low_stock_threshold} onChange={e => set('low_stock_threshold', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Container Size</label>
-            <input type="number" step="0.01" value={form.container_size} onChange={e => set('container_size', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Container Unit</label>
-            <input value={form.container_unit} onChange={e => set('container_unit', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Mix Rate</label>
-            <input value={form.mix_rate} onChange={e => set('mix_rate', e.target.value)}
-              placeholder="e.g. 10 fl oz / 100 gal"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Cost per Container ($)</label>
-            <input type="number" step="0.01" value={form.cost_per_container} onChange={e => set('cost_per_container', e.target.value)}
-              placeholder="Leave blank if unknown"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-        </div>
-
-        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
-
-        <div className="flex gap-3 mt-5">
-          <button onClick={onClose}
-            className="flex-1 py-3 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all">
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 rounded-xl bg-brand-green text-forest-950 font-bold text-sm transition-all disabled:opacity-40">
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ─── Delete Confirm Modal ───────────────────────────── */
-function DeleteModal({ product, onClose, onDeleted }) {
-  const [deleting, setDeleting] = useState(false)
-
-  async function handleDelete() {
-    setDeleting(true)
-    await supabase.from('products').delete().eq('id', product.id)
-    onDeleted()
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-forest-900 border border-white/10 rounded-2xl p-6 z-10">
-        <div className="text-3xl text-center mb-3">🗑️</div>
-        <h2 className="text-white font-bold text-center mb-2">Delete Product?</h2>
-        <p className="text-white/40 text-sm text-center mb-6">
-          <span className="text-white/70 font-medium">{product.name}</span> will be permanently removed. This cannot be undone.
-        </p>
-        <div className="flex gap-3">
-          <button onClick={onClose}
-            className="flex-1 py-3 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all">
-            Cancel
-          </button>
-          <button onClick={handleDelete} disabled={deleting}
-            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm transition-all disabled:opacity-40 hover:bg-red-400">
-            {deleting ? 'Deleting…' : 'Delete'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ─── Main View ──────────────────────────────────── */
+/* ─── Main View ───────────────────────────────────────── */
 export default function StockView() {
   const [products, setProducts] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [editTarget, setEditTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const navigate = useNavigate()
-  const { isManager } = useAuth()
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name')
@@ -341,21 +190,6 @@ export default function StockView() {
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.badge}`}>
                       {meta.label}
                     </span>
-                    {/* Manager actions */}
-                    {isManager && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditTarget(product)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-brand-green hover:bg-brand-green/10 transition-all text-xs"
-                          title="Edit"
-                        >✏️</button>
-                        <button
-                          onClick={() => setDeleteTarget(product)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all text-xs"
-                          title="Delete"
-                        >🗑️</button>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -409,21 +243,6 @@ export default function StockView() {
         </div>
       )}
 
-      {/* Modals */}
-      {editTarget && (
-        <EditModal
-          product={editTarget}
-          onClose={() => setEditTarget(null)}
-          onSaved={loadProducts}
-        />
-      )}
-      {deleteTarget && (
-        <DeleteModal
-          product={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onDeleted={loadProducts}
-        />
-      )}
     </div>
   )
 }
