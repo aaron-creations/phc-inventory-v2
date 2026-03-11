@@ -9,7 +9,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [magicSent, setMagicSent] = useState(false)
   const navigate = useNavigate()
   const { session } = useAuth()
 
@@ -33,19 +32,6 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) setError(error.message)
-  }
-
-  async function handleMagicLink(e) {
-    e.preventDefault()
-    if (!email) { setError('Please enter your email first.'); return }
-    setError(''); setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    })
-    setLoading(false)
-    if (error) setError(error.message)
-    else setMagicSent(true)
   }
 
   return (
@@ -109,7 +95,7 @@ export default function LoginPage() {
 
         <div className="w-full max-w-sm">
 
-          {mode === 'options' && !magicSent && (
+          {mode === 'options' && (
             <>
               <h2 className="font-serif text-3xl font-bold text-white mb-1">Welcome back</h2>
               <p className="text-white/40 text-sm mb-8">Sign in to access your inventory dashboard.</p>
@@ -137,7 +123,7 @@ export default function LoginPage() {
                 onClick={() => setMode('email')}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-white/10 text-white/70 hover:text-white hover:bg-white/5 text-sm font-medium transition-all"
               >
-                ✉️ Continue with Email / Magic Link
+                ✉️ Continue with Email
               </button>
 
               {error && <p className="text-red-400 text-xs mt-4 text-center">{error}</p>}
@@ -149,7 +135,7 @@ export default function LoginPage() {
             </>
           )}
 
-          {mode === 'email' && !magicSent && (
+          {mode === 'email' && (
             <>
               <h2 className="font-serif text-3xl font-bold text-white mb-1">Email sign in</h2>
               <p className="text-white/40 text-sm mb-6">Enter your email to continue.</p>
@@ -161,7 +147,7 @@ export default function LoginPage() {
                 ← Back
               </button>
 
-              {/* Email field shared for both password login and magic link */}
+              {/* Email field */}
               <div className="mb-3">
                 <label className="text-white/40 text-xs mb-1.5 block">Email address</label>
                 <input
@@ -195,40 +181,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Divider */}
-              <div className="flex items-center gap-3 my-4">
-                <div className="flex-1 h-px bg-white/10" />
-                <span className="text-white/25 text-xs">or skip the password</span>
-                <div className="flex-1 h-px bg-white/10" />
-              </div>
-
-              {/* Magic link */}
-              <button
-                onClick={handleMagicLink}
-                disabled={loading || !email}
-                className="w-full py-3 rounded-xl border border-white/10 text-white/60 hover:text-white hover:bg-white/5 text-sm font-medium transition-all"
-              >
-                {loading ? 'Sending…' : '✨ Email me a magic link'}
-              </button>
             </>
-          )}
-
-          {magicSent && (
-            <div className="text-center py-6">
-              <div className="text-5xl mb-5">📬</div>
-              <h3 className="font-serif text-2xl font-bold text-white mb-3">Check your inbox</h3>
-              <p className="text-white/40 text-sm leading-relaxed">
-                We sent a magic link to{' '}
-                <span className="text-white/70 font-medium">{email}</span>.<br />
-                Click it to sign in instantly — no password needed.
-              </p>
-              <button
-                onClick={() => { setMagicSent(false); setMode('options'); setEmail('') }}
-                className="mt-8 text-white/30 hover:text-white/60 text-xs transition-colors"
-              >
-                ← Use a different method
-              </button>
-            </div>
           )}
         </div>
 
