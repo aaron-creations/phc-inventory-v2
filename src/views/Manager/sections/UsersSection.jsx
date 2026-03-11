@@ -27,6 +27,9 @@ export default function UsersSection() {
   }
 
   async function updateRole(profileId, newRole) {
+    const p = profiles.find(pr => pr.id === profileId)
+    const wasPending = p?.role === 'pending'
+
     setSaving(profileId)
     await supabase.from('user_profiles').update({
       role: newRole,
@@ -34,6 +37,13 @@ export default function UsersSection() {
     }).eq('id', profileId)
     await load()
     setSaving(null)
+
+    // Trigger approval email
+    if (wasPending && newRole !== 'pending' && p?.email) {
+      supabase.functions.invoke('send-approval-email', {
+        body: { email: p.email, name: p.display_name?.split('@')[0] }
+      }).catch(err => console.error('Failed to send approval email:', err))
+    }
   }
 
   async function approveUser(profileId) {

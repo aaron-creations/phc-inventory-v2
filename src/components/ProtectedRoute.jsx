@@ -20,6 +20,10 @@ export function ProtectedRoute({ children }) {
   // Logged in but profile not fetched yet — keep waiting
   if (session && profile === null) return <AuthSpinner />
 
+  // Intercept magic link users who have no password
+  const needsPassword = profile?.auth_providers?.includes('email') && profile?.has_password === false
+  if (session && needsPassword) return <Navigate to="/set-password" replace />
+
   // Logged in but awaiting manager approval
   if (profile?.role === 'pending') return <Navigate to="/access-pending" replace />
 
@@ -36,6 +40,10 @@ export function ManagerRoute({ children }) {
   if (loading) return <AuthSpinner />
   if (!session) return <Navigate to="/login" state={{ from: location }} replace />
   if (session && profile === null) return <AuthSpinner />
+  
+  const needsPassword = profile?.auth_providers?.includes('email') && profile?.has_password === false
+  if (session && needsPassword) return <Navigate to="/set-password" replace />
+
   if (profile?.role === 'pending') return <Navigate to="/access-pending" replace />
   if (profile?.role !== 'manager') return <Navigate to="/" replace />
 
@@ -50,6 +58,9 @@ export function GuestRoute({ children }) {
   const { session, profile, loading } = useAuth()
 
   if (loading) return <AuthSpinner />
+
+  const needsPassword = profile?.auth_providers?.includes('email') && profile?.has_password === false
+  if (session && needsPassword) return <Navigate to="/set-password" replace />
 
   if (session && profile?.role === 'pending') return <Navigate to="/access-pending" replace />
   if (session && (profile?.role === 'manager' || profile?.role === 'technician')) {
