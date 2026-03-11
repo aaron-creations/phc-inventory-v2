@@ -90,6 +90,48 @@ function ProductModal({ product, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Derived values for VERIFY section
+  const cStock = parseFloat(form.containers_in_stock) || 0
+  const cSize = parseFloat(form.container_size) || 0
+  const cCost = parseFloat(form.cost_per_container) || 0
+  const mRate = parseFloat(form.mixAmt) || 0
+  const mPer = parseFloat(form.mixPer) || 100
+
+  // 1. Total volume in original unit
+  const totalOriginalVolume = cStock * cSize
+  
+  // 2. Conversion to fl oz for concentrate
+  let totalFlOz = 0
+  if (form.container_unit === 'gal') totalFlOz = totalOriginalVolume * 128
+  else if (form.container_unit === 'qt') totalFlOz = totalOriginalVolume * 32
+  else if (form.container_unit === 'pint') totalFlOz = totalOriginalVolume * 16
+  else if (form.container_unit === 'liter') totalFlOz = totalOriginalVolume * 33.814
+  else if (form.container_unit === 'oz' || form.container_unit === 'fl oz') totalFlOz = totalOriginalVolume
+
+  // 3. Treatment calc
+  // If we have totalFlOz and a mix rate (e.g., X fl oz / Y gal mix),
+  // total treatable gal mix = (totalFlOz / mixRateFlOz) * Y gal mix
+  let treatsTotal = null
+  if (form.unit_type === 'mixed' && mRate > 0 && form.mixUnit === 'fl oz') {
+    treatsTotal = (totalFlOz / mRate) * mPer
+  }
+
+  // 4. Cost per fl oz
+  // If container cost and container size > 0
+  let costPerFlOz = null
+  if (cCost > 0 && cSize > 0) {
+    let flOzPerContainer = 0
+    if (form.container_unit === 'gal') flOzPerContainer = cSize * 128
+    else if (form.container_unit === 'qt') flOzPerContainer = cSize * 32
+    else if (form.container_unit === 'pint') flOzPerContainer = cSize * 16
+    else if (form.container_unit === 'liter') flOzPerContainer = cSize * 33.814
+    else if (form.container_unit === 'oz' || form.container_unit === 'fl oz') flOzPerContainer = cSize
+
+    if (flOzPerContainer > 0) {
+      costPerFlOz = cCost / flOzPerContainer
+    }
+  }
+
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
@@ -245,6 +287,41 @@ function ProductModal({ product, onClose, onSaved }) {
         </div>
 
         {error && <p className="text-red-500 text-xs mt-4 p-3 bg-red-50 rounded-lg border border-red-200">{error}</p>}
+
+        {/* VERIFY */}
+        <div className="mt-6">
+          <h3 className="text-brand-green font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-2">
+            <span className="text-lg leading-none">⛭</span> VERIFY
+          </h3>
+          <div className="bg-brand-green/5 border border-brand-green/20 rounded-xl p-4 text-xs space-y-2 text-black/70 font-medium">
+            <div className="flex items-center gap-2">
+              <span>📦</span> {cStock.toLocaleString(undefined, { maximumFractionDigits: 5 })} containers × {cSize} {form.container_unit} = <span className="text-brand-green">{(totalOriginalVolume).toLocaleString(undefined, { maximumFractionDigits: 2 })} {form.container_unit}</span>
+            </div>
+            {totalFlOz > 0 && (
+              <div className="flex items-center gap-2">
+                <span>🔄</span> <span className="text-brand-green">{totalFlOz.toLocaleString(undefined, { maximumFractionDigits: 0 })} fl oz</span> of concentrate
+              </div>
+            )}
+            {form.unit_type === 'mixed' && mRate > 0 && (
+              <div className="flex items-center gap-2">
+                <span>📐</span> Mix rate: {mRate} {form.mixUnit} per {mPer} gal mix
+              </div>
+            )}
+            {treatsTotal !== null && (
+              <div className="flex items-center gap-2">
+                <span>🌿</span> Treats <span className="text-brand-green">~{treatsTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} gal</span> total
+              </div>
+            )}
+            {costPerFlOz !== null && (
+              <div className="flex items-center gap-2">
+                <span>💰</span> Cost per fl oz: <span className="text-brand-green">${costPerFlOz.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span>👨‍🔧</span> Techs enter: {form.unit_type === 'mixed' ? 'gallons of spray mix' : form.container_unit}
+            </div>
+          </div>
+        </div>
 
         <div className="flex justify-end gap-3 mt-8">
           <button onClick={onClose}
