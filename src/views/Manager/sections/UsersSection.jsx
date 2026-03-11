@@ -59,12 +59,18 @@ export default function UsersSection() {
   async function removeUser(authUserId, profileId) {
     if (!confirm('PERMANENTLY DELETE this user? This cannot be undone.')) return
     setSaving(profileId)
-    const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
-    if (error) {
-      alert(`Error deleting user: ${error.message}`)
+    try {
+      const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
+      if (error) {
+        alert(`Error deleting user: ${error.message}`)
+      }
+    } catch (err) {
+      alert(`Unexpected error: ${err.message}`)
+    } finally {
+      setEditingUserId(null)
+      await load()
+      setSaving(null)
     }
-    await load()
-    setSaving(null)
   }
 
   async function approveUser(profileId) {
@@ -74,12 +80,17 @@ export default function UsersSection() {
   async function denyUser(authUserId, profileId) {
     if (!confirm('Remove this user from the system? They will need to request access again.')) return
     setSaving(profileId)
-    const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
-    if (error) {
-      alert(`Error denying user: ${error.message}`)
+    try {
+      const { error } = await supabase.rpc('delete_user', { target_user_id: authUserId })
+      if (error) {
+        alert(`Error denying user: ${error.message}`)
+      }
+    } catch (err) {
+      alert(`Unexpected error: ${err.message}`)
+    } finally {
+      await load()
+      setSaving(null)
     }
-    await load()
-    setSaving(null)
   }
 
   async function linkTechnician(profileId, technicianId) {
