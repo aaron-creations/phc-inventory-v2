@@ -345,7 +345,8 @@ function EditBlendModal({ blend, onClose, onSaved }) {
                 >
                   {c.toUpperCase()}
                 </button>
-              </div>
+              ))}
+            </div>
           </div>
 
           <div>
