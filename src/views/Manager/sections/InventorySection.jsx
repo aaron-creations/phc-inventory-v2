@@ -9,14 +9,41 @@ function getStatus(p) {
 }
 
 const statusMeta = {
-  ok:  { label: 'OK',  bar: '#4ade80', cls: 'text-brand-green bg-brand-green/10 border-brand-green/25' },
-  low: { label: 'Low', bar: '#fb923c', cls: 'text-brand-orange bg-brand-orange/10 border-brand-orange/25' },
-  out: { label: 'Out', bar: '#f87171', cls: 'text-red-400 bg-red-400/10 border-red-400/25' },
+  ok:  { label: '✓ In stock',  bar: '#4ade80', cls: 'text-brand-green' },
+  low: { label: '⚠ Low stock', bar: '#fb923c', cls: 'text-brand-orange' },
+  out: { label: '✕ Out of stock', bar: '#f87171', cls: 'text-red-400' },
 }
 
 function stockPercent(p) {
   const cap = Math.max(p.low_stock_threshold * 2, 1)
   return Math.min((p.containers_in_stock / cap) * 100, 100)
+}
+
+function formatVolume(containers, size, unit) {
+  if (!containers || !size || !unit) return '—'
+  const total = containers * size
+  if (unit === 'gal') {
+    return `${(total * 128).toLocaleString(undefined, { maximumFractionDigits: 1 })} fl oz`
+  }
+  if (unit === 'pint') {
+    return `${(total * 473.176).toLocaleString(undefined, { maximumFractionDigits: 1 })} mL`
+  }
+  if (unit === 'liter') {
+    return `${(total * 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} mL`
+  }
+  if (unit === 'oz' || unit === 'fl oz') {
+    return `${total.toLocaleString(undefined, { maximumFractionDigits: 1 })} fl oz`
+  }
+  return `${total.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`
+}
+
+function parseMixRate(mixRate) {
+  if (!mixRate) return { amount: '', unit: 'fl oz', per: '100' }
+  const match = mixRate.match(/^([\d.]+)\s*(.+?)\/(\d+)\s*gal$/)
+  if (match) {
+    return { amount: match[1], unit: match[2].trim(), per: match[3] }
+  }
+  return { amount: '', unit: 'fl oz', per: '100' }
 }
 
 function exportCSV(products) {
@@ -42,17 +69,23 @@ function exportCSV(products) {
   URL.revokeObjectURL(url)
 }
 
-/* ─── Edit Modal ──────────────────────────────────────── */
-function EditModal({ product, onClose, onSaved }) {
+/* ─── Product Modal ──────────────────────────────────────── */
+function ProductModal({ product, onClose, onSaved }) {
+  const isNew = !product
+  const parsedMix = parseMixRate(product?.mix_rate)
+
   const [form, setForm] = useState({
-    name: product.name,
-    category: product.category ?? '',
-    containers_in_stock: product.containers_in_stock,
-    container_size: product.container_size,
-    container_unit: product.container_unit,
-    mix_rate: product.mix_rate ?? '',
-    cost_per_container: product.cost_per_container ?? '',
-    low_stock_threshold: product.low_stock_threshold,
+    name: product?.name || '',
+    category: product?.category || '',
+    containers_in_stock: product?.containers_in_stock ?? '',
+    container_size: product?.container_size ?? '',
+    container_unit: product?.container_unit || 'gal',
+    unit_type: product?.unit_type || 'mixed',
+    mixAmt: parsedMix.amount,
+    mixUnit: parsedMix.unit,
+    mixPer: parsedMix.per,
+    cost_per_container: product?.cost_per_container ?? '',
+    low_stock_threshold: product?.low_stock_threshold ?? 1,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -64,86 +97,163 @@ function EditModal({ product, onClose, onSaved }) {
   async function handleSave() {
     setSaving(true)
     setError(null)
-    const { error } = await supabase.from('products').update({
+    
+    let finalMixRate = null
+    if (form.unit_type === 'mixed' && form.mixAmt) {
+      finalMixRate = `${form.mixAmt} ${form.mixUnit}/${form.mixPer} gal`
+    }
+
+    const payload = {
       name: form.name.trim(),
       category: form.category.trim() || null,
       containers_in_stock: parseFloat(form.containers_in_stock) || 0,
       container_size: parseFloat(form.container_size) || 0,
       container_unit: form.container_unit.trim(),
-      mix_rate: form.mix_rate.trim() || null,
+      unit_type: form.unit_type,
+      mix_rate: finalMixRate,
       cost_per_container: form.cost_per_container !== '' ? parseFloat(form.cost_per_container) : null,
       low_stock_threshold: parseFloat(form.low_stock_threshold) || 1,
-    }).eq('id', product.id)
+    }
 
-    if (error) { setError(error.message); setSaving(false); return }
+    let err
+    if (isNew) {
+      const { error } = await supabase.from('products').insert(payload)
+      err = error
+    } else {
+      const { error } = await supabase.from('products').update(payload).eq('id', product.id)
+      err = error
+    }
+
+    if (err) { setError(err.message); setSaving(false); return }
     onSaved()
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-forest-900 border border-white/10 rounded-2xl p-6 max-h-[90vh] overflow-y-auto z-10 mx-4">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-white font-bold text-lg">Edit Product</h2>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl leading-none">✕</button>
+      <div className="relative w-full max-w-2xl bg-[#fdfcfa] text-[#333] border border-black/10 rounded-2xl p-8 max-h-[90vh] overflow-y-auto z-10 mx-auto shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-bold text-2xl font-serif text-[#1e293b]">{isNew ? 'Add New Product' : 'Edit Product'}</h2>
+          <button onClick={onClose} className="text-black/30 hover:text-black transition-colors text-xl font-bold p-1 leading-none -mt-2">✕</button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Product Name</label>
-            <input value={form.name} onChange={e => set('name', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Category</label>
-            <input value={form.category} onChange={e => set('category', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
+        <div className="space-y-6">
+          {/* PRODUCT INFO */}
           <div>
-            <label className="text-white/40 text-xs mb-1 block">Containers in Stock</label>
-            <input type="number" step="0.01" value={form.containers_in_stock} onChange={e => set('containers_in_stock', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
+            <h3 className="text-brand-green font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span className="text-lg leading-none">⛭</span> PRODUCT INFO
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="text-black/60 text-xs font-bold mb-1.5 block">PRODUCT NAME</label>
+                <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. BioPro ArborPlex 14-4-5"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block">CATEGORY</label>
+                <input value={form.category} onChange={e => set('category', e.target.value)} placeholder="e.g. Pesticide"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block">COST PER CONTAINER ($)</label>
+                <input type="number" step="0.01" value={form.cost_per_container} onChange={e => set('cost_per_container', e.target.value)} placeholder="0.00"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+            </div>
           </div>
+
+          <hr className="border-black/5" />
+
+          {/* CONTAINER INFO */}
           <div>
-            <label className="text-white/40 text-xs mb-1 block">Low Stock Threshold</label>
-            <input type="number" step="0.5" value={form.low_stock_threshold} onChange={e => set('low_stock_threshold', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
+            <h3 className="text-brand-green font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span className="text-lg leading-none">⛭</span> CONTAINER
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block"># CONTAINERS</label>
+                <input type="number" step="0.01" value={form.containers_in_stock} onChange={e => set('containers_in_stock', e.target.value)} placeholder="e.g. 2.5"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block">CONTAINER SIZE</label>
+                <input type="number" step="0.01" value={form.container_size} onChange={e => set('container_size', e.target.value)} placeholder="e.g. 2.5"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block">CONTAINER UNIT</label>
+                <input value={form.container_unit} onChange={e => set('container_unit', e.target.value)} placeholder="e.g. gal"
+                  className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+              </div>
+              <div>
+                <label className="text-black/60 text-xs font-bold mb-1.5 block text-brand-orange truncate" title="LOW STOCK ALARM">LOW STOCK ALARM</label>
+                <input type="number" step="0.5" value={form.low_stock_threshold} onChange={e => set('low_stock_threshold', e.target.value)} placeholder="e.g. 1"
+                  className="w-full bg-orange-50/50 border border-brand-orange/30 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-orange transition-colors shadow-sm" />
+              </div>
+            </div>
           </div>
+
+          <hr className="border-black/5" />
+
+          {/* APPLICATION TYPE */}
           <div>
-            <label className="text-white/40 text-xs mb-1 block">Container Size</label>
-            <input type="number" step="0.01" value={form.container_size} onChange={e => set('container_size', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Container Unit</label>
-            <input value={form.container_unit} onChange={e => set('container_unit', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Mix Rate</label>
-            <input value={form.mix_rate} onChange={e => set('mix_rate', e.target.value)}
-              placeholder="e.g. 10 fl oz / 100 gal"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
-          </div>
-          <div className="col-span-2">
-            <label className="text-white/40 text-xs mb-1 block">Cost per Container ($)</label>
-            <input type="number" step="0.01" value={form.cost_per_container} onChange={e => set('cost_per_container', e.target.value)}
-              placeholder="Leave blank if unknown"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50" />
+            <h3 className="text-brand-green font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span className="text-lg leading-none">⛭</span> APPLICATION TYPE
+            </h3>
+            <div className="flex gap-4 mb-4">
+              <button 
+                onClick={() => set('unit_type', 'mixed')}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border flex items-center justify-center gap-2
+                  ${form.unit_type === 'mixed' ? 'bg-brand-green/10 border-brand-green text-brand-green shadow-sm' : 'bg-white border-black/10 text-black/50 hover:bg-black/5'}`}>
+                🧪 Mixed
+              </button>
+              <button 
+                onClick={() => set('unit_type', 'direct')}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border flex items-center justify-center gap-2
+                  ${form.unit_type === 'direct' ? 'bg-brand-blue/10 border-brand-blue text-brand-blue shadow-sm' : 'bg-white border-black/10 text-black/50 hover:bg-black/5'}`}>
+                💉 Direct use
+              </button>
+            </div>
+
+            {form.unit_type === 'mixed' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-black/60 text-xs font-bold mb-1.5 block">MIX RATE</label>
+                    <input value={form.mixAmt} onChange={e => set('mixAmt', e.target.value)} placeholder="64"
+                      className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+                  </div>
+                  <div>
+                    <label className="text-black/60 text-xs font-bold mb-1.5 block">MIX UNIT</label>
+                    <input value={form.mixUnit} onChange={e => set('mixUnit', e.target.value)} placeholder="fl oz"
+                      className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+                  </div>
+                  <div>
+                    <label className="text-black/60 text-xs font-bold mb-1.5 block">PER (GAL)</label>
+                    <input value={form.mixPer} onChange={e => set('mixPer', e.target.value)} placeholder="100"
+                      className="w-full bg-white border border-black/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-green/50 transition-colors shadow-sm" />
+                  </div>
+                </div>
+
+                <div className="bg-brand-green/10 border border-brand-green/30 rounded-lg p-3 flex items-center gap-2 text-brand-green text-xs font-medium">
+                  ✓ {form.mixUnit === 'fl oz' ? '1 gal = 128 fl oz' : 'Double check your conversion rates'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+        {error && <p className="text-red-500 text-xs mt-4 p-3 bg-red-50 rounded-lg border border-red-200">{error}</p>}
 
-        <div className="flex gap-3 mt-5">
+        <div className="flex justify-end gap-3 mt-8">
           <button onClick={onClose}
-            className="flex-1 py-3 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all">
+            className="px-6 py-2.5 rounded-xl border border-black/10 text-black/60 hover:bg-black/5 font-bold text-sm transition-all focus:outline-none focus:ring-2 ring-black/10">
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 rounded-xl bg-brand-green text-forest-950 font-bold text-sm transition-all disabled:opacity-40">
-            {saving ? 'Saving…' : 'Save Changes'}
+            className="px-8 py-2.5 rounded-xl bg-[#448c4a] hover:bg-[#36703b] text-white font-bold text-sm transition-all disabled:opacity-50 shadow-md focus:outline-none focus:ring-2 ring-brand-green/50">
+            {saving ? 'Saving…' : (isNew ? 'Add Product' : 'Save Changes')}
           </button>
         </div>
       </div>
@@ -165,7 +275,7 @@ function DeleteModal({ product, onClose, onDeleted }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-forest-900 border border-white/10 rounded-2xl p-6 z-10">
+      <div className="relative w-full max-w-sm bg-forest-900 border border-white/10 rounded-2xl p-6 z-10 mx-auto">
         <div className="text-3xl text-center mb-3">🗑️</div>
         <h2 className="text-white font-bold text-center mb-2">Delete Product?</h2>
         <p className="text-white/40 text-sm text-center mb-6">
@@ -191,7 +301,8 @@ export default function InventorySection() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState(null) // null | 'ok' | 'low' | 'out'
+  const [statusFilter, setStatusFilter] = useState(null)
+  
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
@@ -220,11 +331,10 @@ export default function InventorySection() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <h2 className="text-white font-bold text-xl flex-1">Inventory</h2>
-        <div className="flex items-center gap-3">
-          <div className="glass rounded-lg px-3 py-1.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="glass rounded-lg px-3 py-1.5 hidden sm:block">
             <span className="text-white/40 text-xs">Total Value: </span>
             <span className="text-brand-green text-sm font-bold">${totalValue.toFixed(2)}</span>
           </div>
@@ -234,12 +344,16 @@ export default function InventorySection() {
           >
             ⬇ Export CSV
           </button>
+          <button
+            onClick={() => setEditTarget({ isNew: true })}
+            className="bg-brand-green text-forest-950 font-bold rounded-lg px-4 py-1.5 text-sm hover:bg-brand-green/80 transition-colors flex items-center gap-1.5 shadow-md"
+          >
+            <span className="text-lg leading-none">+</span> Add Product
+          </button>
         </div>
       </div>
 
-      {/* Search + Filter Row */}
       <div className="flex flex-wrap gap-3 mb-5">
-        {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm pointer-events-none">🔍</span>
           <input
@@ -254,8 +368,6 @@ export default function InventorySection() {
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors text-xs">✕</button>
           )}
         </div>
-
-        {/* Status Filter Chips */}
         <div className="flex gap-2">
           {[
             { key: 'ok',  label: `✅ OK (${counts.ok})`,   color: '#4ade80' },
@@ -278,100 +390,79 @@ export default function InventorySection() {
         </div>
       </div>
 
-      {/* Result count */}
-      {(search || statusFilter) && (
-        <p className="text-white/25 text-xs mb-3">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</p>
-      )}
-
-      {/* Table */}
-      <div className="glass rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[700px]">
-          <thead>
-            <tr className="border-b border-white/10">
-              {['Product', 'Status', 'Stock', 'Mix Rate', 'Cost/Container', 'Value', ''].map(h => (
-                <th key={h} className="text-left text-white/30 text-xs font-semibold px-4 py-3">{h}</th>
-              ))}
+      <div className="glass rounded-xl overflow-x-auto shadow-xl">
+        <table className="w-full min-w-[900px]">
+          <thead className="bg-[#f0ece1]/5">
+            <tr className="border-b border-white/10 uppercase tracking-widest text-[10px] text-white/40">
+              <th className="text-left font-bold px-5 py-4 min-w-[220px]">PRODUCT</th>
+              <th className="text-left font-bold px-4 py-4 min-w-[120px]">STOCK STATUS</th>
+              <th className="text-left font-bold px-4 py-4">CONTAINERS</th>
+              <th className="text-left font-bold px-4 py-4">TOTAL VOLUME</th>
+              <th className="text-left font-bold px-4 py-4">MIX RATE</th>
+              <th className="text-left font-bold px-4 py-4">COST/CONTAINER</th>
+              <th className="text-left font-bold px-4 py-4">TOTAL VALUE</th>
+              <th className="px-4 py-4 w-24"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="border-b border-white/5">
-                  <td colSpan={7} className="px-4 py-3">
-                    <div className="h-4 bg-white/5 rounded animate-pulse" />
-                  </td>
+                  <td colSpan={8} className="px-5 py-4"><div className="h-4 bg-white/5 rounded animate-pulse" /></td>
                 </tr>
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  <div className="text-3xl mb-2">🔍</div>
-                  <p className="text-white/30 text-sm">No products match your search.</p>
-                </td>
+                <td colSpan={8} className="px-5 py-12 text-center text-white/30 text-sm">No products match your search.</td>
               </tr>
             ) : filtered.map((p, i) => {
               const status = getStatus(p)
               const meta = statusMeta[status]
               const pct = stockPercent(p)
-              const value = p.cost_per_container
-                ? `$${(p.containers_in_stock * p.cost_per_container).toFixed(2)}`
-                : '—'
+              const value = p.cost_per_container ? `$${(p.containers_in_stock * p.cost_per_container).toFixed(2)}` : '—'
 
               return (
-                <tr
-                  key={p.id}
-                  className={`${i < filtered.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/[0.03] transition-colors group`}
-                >
-                  {/* Product name + category */}
-                  <td className="px-4 py-3 max-w-[220px]">
-                    <p className="text-white text-xs font-medium truncate">{p.name}</p>
-                    {p.category && <p className="text-white/30 text-xs mt-0.5">{p.category}</p>}
+                <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors group">
+                  <td className="px-5 py-4">
+                    <p className="text-white text-sm font-semibold truncate leading-tight w-full max-w-[250px]">{p.name}</p>
+                    {p.category && <p className="text-white/40 text-xs mt-1 flex items-center gap-1">🧪 {p.category}</p>}
                   </td>
-
-                  {/* Status badge */}
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
-                  </td>
-
-                  {/* Stock + progress bar */}
-                  <td className="px-4 py-3 min-w-[120px]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white/60 text-xs font-mono w-8 flex-shrink-0">{p.containers_in_stock.toFixed(2)}</span>
-                      <div className="flex-1 bg-white/5 rounded-full h-1.5 overflow-hidden min-w-[60px]">
-                        <div
-                          className="h-1.5 rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, backgroundColor: meta.bar, opacity: 0.8 }}
-                        />
-                      </div>
+                  <td className="px-4 py-4">
+                    <div className={`text-sm font-bold ${meta.cls}`}>{meta.label}</div>
+                    <div className="w-full max-w-[50px] bg-white/5 rounded-full h-[3px] mt-1 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: meta.bar }} />
                     </div>
                   </td>
-
-                  {/* Mix rate */}
-                  <td className="px-4 py-3 text-white/50 text-xs max-w-[140px]">
-                    <span className="truncate block" title={p.mix_rate}>{p.mix_rate || '—'}</span>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className="font-bold text-white text-sm">{p.containers_in_stock.toFixed(2)}</span>
+                    <span className="text-white/40 text-xs ml-1.5">{p.container_unit}</span>
                   </td>
-
-                  {/* Cost/Container */}
-                  <td className="px-4 py-3 text-white/50 text-xs font-mono">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className="text-white/70 text-sm">{formatVolume(p.containers_in_stock, p.container_size, p.container_unit)}</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    {p.unit_type === 'direct' ? (
+                      <span className="text-white/30 text-xs font-medium">Direct</span>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-1 rounded bg-brand-green/10 text-brand-green border border-brand-green/20 text-xs font-semibold whitespace-nowrap">
+                        {p.mix_rate || '—'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-white/60 text-sm font-mono whitespace-nowrap">
                     {p.cost_per_container ? `$${p.cost_per_container.toFixed(2)}` : '—'}
                   </td>
-
-                  {/* Total Value */}
-                  <td className="px-4 py-3 text-white/80 text-xs font-mono font-medium">{value}</td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3 text-right w-[80px]">
-                    <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => setEditTarget(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-brand-green hover:bg-brand-green/10"
-                        title="Edit"
-                      >✏️</button>
-                      <button
-                        onClick={() => setDeleteTarget(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10"
-                        title="Delete"
-                      >🗑️</button>
+                  <td className="px-4 py-4 text-white font-bold text-sm font-mono whitespace-nowrap">
+                    {value}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditTarget(p)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/5 text-brand-orange hover:bg-white/10 hover:border-brand-orange/30 transition-all shadow-sm">
+                        ✏️
+                      </button>
+                      <button onClick={() => setDeleteTarget(p)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/5 text-red-400 hover:bg-white/10 hover:border-red-400/30 transition-all shadow-sm">
+                        🗑️
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -381,8 +472,12 @@ export default function InventorySection() {
         </table>
       </div>
 
-      {editTarget && <EditModal product={editTarget} onClose={() => setEditTarget(null)} onSaved={loadProducts} />}
-      {deleteTarget && <DeleteModal product={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={loadProducts} />}
+      {editTarget && (
+        <ProductModal product={editTarget.isNew ? null : editTarget} onClose={() => setEditTarget(null)} onSaved={loadProducts} />
+      )}
+      {deleteTarget && (
+        <DeleteModal product={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={loadProducts} />
+      )}
     </div>
   )
 }
