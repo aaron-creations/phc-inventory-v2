@@ -13,7 +13,7 @@ import ManagerPanel from './views/Manager/ManagerPanel'
 export default function App() {
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-forest-950">
+      <div className="bg-forest-950">
         <Routes>
           {/* Guest-only (redirects away if already logged in) */}
           <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />

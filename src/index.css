@@ -5,9 +5,35 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+    Use 100dvh (dynamic viewport height) instead of 100vh.
+    On iOS Safari, 100vh includes the collapsible address bar which causes
+    the page to appear taller than the visible area, breaking touch scrolling.
+    dvh accounts for the actual visible viewport so overscroll works correctly.
+  */
+  html {
+    height: 100%;
+    /* Allow vertical pan/scroll gestures — critical for iOS Safari */
+    touch-action: pan-y;
+    /* Prevent horizontal overscroll bounce (keeps left/right swipe clean) */
+    overscroll-behavior-x: none;
+  }
+
   body {
-    @apply bg-forest-950 text-white min-h-screen;
+    min-height: 100dvh;
+    /* Must be auto — never hidden — so iOS can compute scrollable content height */
+    overflow-y: auto;
+    overflow-x: hidden;
     font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-forest-950 text-white;
+    /* Safe area insets for notched/island iPhones */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  #root {
+    min-height: 100dvh;
+    /* Isolate scroll context so React Router pages scroll independently */
+    isolation: isolate;
   }
 }
 
