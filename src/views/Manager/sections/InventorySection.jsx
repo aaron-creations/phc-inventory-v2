@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 
-/* ─── helpers ────────────────────────────────────── */
+/* ─── helpers ─────────────────────────────────────────── */
 function getStatus(p) {
   if (p.containers_in_stock <= 0) return 'out'
   if (p.containers_in_stock <= p.low_stock_threshold) return 'low'
@@ -42,7 +42,7 @@ function exportCSV(products) {
   URL.revokeObjectURL(url)
 }
 
-/* ─── Edit Modal ────────────────────────────────── */
+/* ─── Edit Modal ──────────────────────────────────────── */
 function EditModal({ product, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: product.name,
@@ -151,7 +151,7 @@ function EditModal({ product, onClose, onSaved }) {
   )
 }
 
-/* ─── Delete Confirm ────────────────────────────────── */
+/* ─── Delete Confirm ──────────────────────────────────── */
 function DeleteModal({ product, onClose, onDeleted }) {
   const [deleting, setDeleting] = useState(false)
 
@@ -186,12 +186,12 @@ function DeleteModal({ product, onClose, onDeleted }) {
   )
 }
 
-/* ─── Main Section ──────────────────────────────────── */
+/* ─── Main Section ────────────────────────────────────── */
 export default function InventorySection() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState(null)
+  const [statusFilter, setStatusFilter] = useState(null) // null | 'ok' | 'low' | 'out'
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
@@ -239,6 +239,7 @@ export default function InventorySection() {
 
       {/* Search + Filter Row */}
       <div className="flex flex-wrap gap-3 mb-5">
+        {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm pointer-events-none">🔍</span>
           <input
@@ -254,6 +255,7 @@ export default function InventorySection() {
           )}
         </div>
 
+        {/* Status Filter Chips */}
         <div className="flex gap-2">
           {[
             { key: 'ok',  label: `✅ OK (${counts.ok})`,   color: '#4ade80' },
@@ -276,13 +278,14 @@ export default function InventorySection() {
         </div>
       </div>
 
+      {/* Result count */}
       {(search || statusFilter) && (
         <p className="text-white/25 text-xs mb-3">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</p>
       )}
 
       {/* Table */}
-      <div className="glass rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div className="glass rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-white/10">
               {['Product', 'Status', 'Stock', 'Mix Rate', 'Cost/Container', 'Value', ''].map(h => (
@@ -319,13 +322,18 @@ export default function InventorySection() {
                   key={p.id}
                   className={`${i < filtered.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/[0.03] transition-colors group`}
                 >
+                  {/* Product name + category */}
                   <td className="px-4 py-3 max-w-[220px]">
                     <p className="text-white text-xs font-medium truncate">{p.name}</p>
                     {p.category && <p className="text-white/30 text-xs mt-0.5">{p.category}</p>}
                   </td>
+
+                  {/* Status badge */}
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded border ${meta.cls}`}>{meta.label}</span>
                   </td>
+
+                  {/* Stock + progress bar */}
                   <td className="px-4 py-3 min-w-[120px]">
                     <div className="flex items-center gap-2">
                       <span className="text-white/60 text-xs font-mono w-8 flex-shrink-0">{p.containers_in_stock.toFixed(2)}</span>
@@ -337,23 +345,31 @@ export default function InventorySection() {
                       </div>
                     </div>
                   </td>
+
+                  {/* Mix rate */}
                   <td className="px-4 py-3 text-white/50 text-xs max-w-[140px]">
-                    <span className="truncate block">{p.mix_rate ?? '—'}</span>
+                    <span className="truncate block" title={p.mix_rate}>{p.mix_rate || '—'}</span>
                   </td>
+
+                  {/* Cost/Container */}
                   <td className="px-4 py-3 text-white/50 text-xs font-mono">
                     {p.cost_per_container ? `$${p.cost_per_container.toFixed(2)}` : '—'}
                   </td>
-                  <td className="px-4 py-3 text-white/70 text-xs font-mono font-medium">{value}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                  {/* Total Value */}
+                  <td className="px-4 py-3 text-white/80 text-xs font-mono font-medium">{value}</td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3 text-right w-[80px]">
+                    <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditTarget(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-brand-green hover:bg-brand-green/10 transition-all text-xs"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-brand-green hover:bg-brand-green/10"
                         title="Edit"
                       >✏️</button>
                       <button
                         onClick={() => setDeleteTarget(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-red-400/10 transition-all text-xs"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10"
                         title="Delete"
                       >🗑️</button>
                     </div>
@@ -365,12 +381,8 @@ export default function InventorySection() {
         </table>
       </div>
 
-      {editTarget && (
-        <EditModal product={editTarget} onClose={() => setEditTarget(null)} onSaved={loadProducts} />
-      )}
-      {deleteTarget && (
-        <DeleteModal product={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={loadProducts} />
-      )}
+      {editTarget && <EditModal product={editTarget} onClose={() => setEditTarget(null)} onSaved={loadProducts} />}
+      {deleteTarget && <DeleteModal product={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={loadProducts} />}
     </div>
   )
 }
