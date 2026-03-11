@@ -1,189 +1,160 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 
 export default function BlendsSection() {
   const [blends, setBlends] = useState([])
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState({}) // track which blend cards are open
+  const [expanded, setExpanded] = useState({})
 
-  // Components edit states
-  const [editingBlendId, setEditingBlendId] = useState(null)
-  const [products, setProducts] = useState([]) // For the dropdown
-
-  // Form states
-  const [form, setForm] = useState({ product_id: '', amount_fl_oz_per_100_gal: '' })
-
-  const loadData = async () => {
-    // Fetch blends with their nested components and related products
-    const { data: bData } = await supabase
+  useEffect(() => {
+    supabase
       .from('blends')
-      .select(`
-        id, name,
-        blend_components (
-          id, amount_fl_oz_per_100_gal,
-          products ( id, name )
-        )
-      `)
+      .select('*, blend_components(*, products(name, mix_rate, cost_per_container, container_size, container_unit))')
       .order('name')
-    setBlends(bData || [])
+      .then(({ data }) => { setBlends(data || []); setLoading(false) })
+  }, [])
 
-    // Fetch products for the dropdown
-    const { data: pData } = await supabase.from('products').select('id, name').order('name')
-    setProducts(pData || [])
-
-    setLoading(false)
-  }
-
-  useEffect(() => { loadData() }, [])
-
-  // ─── Component CRUD ─────────────────────────────────────
-  async function handleAddComponent() {
-    if (!form.product_id || !form.amount_fl_oz_per_100_gal) return
-    await supabase.from('blend_components').insert([{
-      blend_id: editingBlendId,
-      product_id: form.product_id,
-      amount_fl_oz_per_100_gal: parseFloat(form.amount_fl_oz_per_100_gal)
-    }])
-    setForm({ product_id: '', amount_fl_oz_per_100_gal: '' })
-    loadData()
-  }
-
-  async function handleDeleteComponent(id) {
-    if (!confirm('Remove this product from the blend?')) return
-    await supabase.from('blend_components').delete().eq('id', id)
-    loadData()
+  const badgeColors = {
+    green:  'border-brand-green/40 text-brand-green bg-brand-green/5',
+    orange: 'border-brand-orange/40 text-brand-orange bg-brand-orange/5',
+    blue:   'border-brand-blue/40 text-brand-blue bg-brand-blue/5',
   }
 
   return (
-    <div className="p-6 max-w-4xl">
-      <h2 className="text-white font-bold text-xl mb-6">Blend Recipes</h2>
+    <div className="p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-white font-bold text-xl">Blends</h2>
+        <span className="text-white/30 text-sm">{blends.length} active</span>
+      </div>
 
       {loading ? (
-        <div className="flex flex-col gap-3 animate-pulse">
-          <div className="h-16 rounded-xl bg-white/5 border border-white/5" />
-          <div className="h-16 rounded-xl bg-white/5 border border-white/5" />
-        </div>
+        Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 glass rounded-xl animate-pulse mb-3" />)
       ) : (
         <div className="flex flex-col gap-3">
           {blends.map(blend => (
-            <div key={blend.id} className="glass rounded-xl overflow-x-auto mb-6">
+            <div key={blend.id} className="glass rounded-xl overflow-x-auto">
               <div
                 className="flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-white/5 transition-all"
                 onClick={() => setExpanded(e => ({ ...e, [blend.id]: !e[blend.id] }))}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-orange/15 border border-brand-orange/30 flex items-center justify-center text-xl">🧬</div>
-                  <h3 className="text-white font-semibold">{blend.name}</h3>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full border ${badgeColors[blend.badge_color] || badgeColors.green}`}>
+                    {blend.emoji} {blend.name}
+                  </span>
+                  <span className="text-white/30 text-xs">{blend.blend_components?.length || 0} products</span>
                 </div>
-                <div className="text-white/30 text-xs flex items-center gap-3">
-                  <span>{blend.blend_components?.length || 0} liquid products</span>
-                  <span className={`transform transition-transform ${expanded[blend.id] ? 'rotate-180' : ''}`}>▼</span>
+                <div className="flex items-center gap-3">
+                  <BlendCostBadge components={blend.blend_components} />
+                  <span className="text-white/30 text-sm">{expanded[blend.id] ? '▲' : '▼'}</span>
                 </div>
               </div>
 
               {expanded[blend.id] && (
-                <div className="border-t border-white/5 bg-black/20 p-4">
-                  
-                  {/* Component Table */}
-                  <div className="bg-forest-900 border border-white/5 rounded-lg overflow-hidden mb-4">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-white/5 bg-white/5">
-                          <th className="text-left text-white/40 font-medium px-4 py-2">Product Name</th>
-                          <th className="text-right text-white/40 font-medium px-4 py-2">Rate (fl oz / 100 gal)</th>
-                          <th className="w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {blend.blend_components?.length === 0 ? (
-                          <tr><td colSpan="3" className="px-4 py-4 text-center text-white/30 text-xs italic">No products added yet.</td></tr>
-                        ) : (
-                          blend.blend_components?.map(comp => (
-                            <tr key={comp.id} className="border-b border-white/5 last:border-0 hover:bg-white/5">
-                              <td className="px-4 py-2.5 text-white/80">{comp.products?.name}</td>
-                              <td className="px-4 py-2.5 text-right font-mono text-brand-orange">{comp.amount_fl_oz_per_100_gal} fl oz</td>
-                              <td className="px-4 py-2.5 text-right">
-                                {editingBlendId === blend.id && (
-                                  <button onClick={() => handleDeleteComponent(comp.id)} className="text-white/20 hover:text-red-400 transition-colors">✕</button>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Edit Toggle / Add Component Form */}
-                  <div className="flex justify-end">
-                    {editingBlendId === blend.id ? (
-                      <div className="w-full flex flex-wrap gap-2 items-center bg-white/5 p-3 rounded-lg border border-brand-orange/20">
-                        <select
-                          className="flex-1 bg-forest-950 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none"
-                          value={form.product_id}
-                          onChange={e => setForm({ ...form, product_id: e.target.value })}
-                        >
-                          <option value="">-- Select Product --</option>
-                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            placeholder="fl oz rate"
-                            className="w-24 bg-forest-950 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none"
-                            value={form.amount_fl_oz_per_100_gal}
-                            onChange={e => setForm({ ...form, amount_fl_oz_per_100_gal: e.target.value })}
-                          />
-                          <button
-                            onClick={handleAddComponent}
-                            className="bg-brand-orange/20 hover:bg-brand-orange text-brand-orange hover:text-forest-950 px-3 py-2 rounded-lg text-xs font-bold transition-all"
-                          >
-                            Add
-                          </button>
-                          <button
-                            onClick={() => { setEditingBlendId(null); setForm({ product_id: '', amount_fl_oz_per_100_gal: ''}) }}
-                            className="text-white/40 hover:text-white px-2 py-2 text-xs transition-colors ml-2"
-                          >
-                            Done
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setEditingBlendId(blend.id)}
-                        className="text-xs text-brand-orange hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1"
-                      >
-                        <span>✏️</span> Edit Recipe
-                      </button>
-                    )}
-                  </div>
-
+                <div className="border-t border-white/5 px-4 pb-4">
+                  <CostBreakdownTable components={blend.blend_components} />
                 </div>
               )}
-
             </div>
           ))}
         </div>
       )}
+    </div>
+  )
+}
 
-      {/* Standalone instructions area */}
-      <div className="glass rounded-xl p-6 mt-8 overflow-x-auto">
-        <h3 className="text-white font-bold mb-4">Add/Edit Blend Component</h3>
-        <table className="w-full min-w-[500px]">
-          <tbody>
+/**
+ * Calculates cost per 100 gallons for one blend component.
+ * Formula:
+ *   cost_per_fl_oz = cost_per_container / (container_size converted to fl oz)
+ *   cost_for_component = cost_per_fl_oz * rate_fl_oz_per_100_gal
+ *
+ * Container unit → fl oz conversion table:
+ *   gal  = 128 fl oz
+ *   qt   = 32  fl oz
+ *   pint = 16  fl oz
+ *   oz   = 1   fl oz (already fl oz)
+ *   liter= 33.814 fl oz
+ */
+const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, liter: 33.814 }
+
+function componentCost(bc) {
+  const p = bc.products
+  if (!p?.cost_per_container || !p?.container_size || !bc.rate_fl_oz_per_100_gal) return null
+  const containerFlOz = p.container_size * (UNIT_TO_FL_OZ[p.container_unit] || 128)
+  const costPerFlOz   = p.cost_per_container / containerFlOz
+  return costPerFlOz * bc.rate_fl_oz_per_100_gal
+}
+
+function blendTotalCost(components = []) {
+  let total = 0
+  let hasCost = false
+  for (const bc of components) {
+    const c = componentCost(bc)
+    if (c !== null) { total += c; hasCost = true }
+  }
+  return hasCost ? total : null
+}
+
+function BlendCostBadge({ components = [] }) {
+  const total = blendTotalCost(components)
+  if (total === null) return null
+  return (
+    <span className="text-xs px-2.5 py-1 rounded-full bg-brand-green/10 text-brand-green border border-brand-green/20 font-mono font-semibold">
+      ${total.toFixed(2)} / 100 gal
+    </span>
+  )
+}
+
+function CostBreakdownTable({ components = [] }) {
+  const total = blendTotalCost(components)
+  const hasCostData = components.some(bc => componentCost(bc) !== null)
+
+  return (
+    <div className="overflow-x-auto mt-3">
+      <table className="w-full min-w-[400px]">
+        <thead>
+          <tr>
+            <th className="text-left text-white/30 text-xs pb-2">Product</th>
+            <th className="text-right text-white/30 text-xs pb-2">Rate</th>
+            {hasCostData && <th className="text-right text-white/30 text-xs pb-2">Cost / 100 gal</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {components?.map(bc => {
+            const cost = componentCost(bc)
+            return (
+              <tr key={bc.id} className="border-t border-white/5">
+                <td className="text-white/70 text-xs py-2">{bc.products?.name}</td>
+                <td className="text-right text-white/40 text-xs font-mono py-2">{bc.rate_fl_oz_per_100_gal} fl oz</td>
+                {hasCostData && (
+                  <td className="text-right text-xs font-mono py-2">
+                    {cost !== null
+                      ? <span className="text-brand-green">${cost.toFixed(3)}</span>
+                      : <span className="text-white/20">—</span>}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
+        </tbody>
+        {hasCostData && total !== null && (
+          <tfoot>
+            <tr className="border-t border-white/10">
+              <td colSpan={2} className="text-white/40 text-xs pt-2 font-semibold">Total / 100 gal</td>
+              <td className="text-right text-brand-green text-sm pt-2 font-bold font-mono">${total.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        )}
+        {!hasCostData && (
+          <tfoot>
             <tr>
-              <td>
-                <p className="text-white/40 text-sm leading-relaxed">
-                  Blend recipes are pre-defined templates used by technicians during logging.<br/><br/>
-                  When a technician logs a <strong>Blend Application</strong> (e.g., 200 gal), the system automatically looks up these rates.
-                  It will pull <strong>({"{rate}"} × 200 ÷ 100) fl oz</strong> of each component from the stock levels, accurately updating all inventory in real-time.
-                </p>
+              <td colSpan={3} className="text-white/20 text-xs pt-3 text-center">
+                Add cost data to products to see cost breakdown.
               </td>
             </tr>
-          </tbody>
-        </table>
-      </div>
+          </tfoot>
+        )}
+      </table>
     </div>
   )
 }
