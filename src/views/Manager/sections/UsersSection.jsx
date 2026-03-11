@@ -68,6 +68,7 @@ export default function UsersSection() {
       : { error: { message: 'Admin invite requires a server-side function. Use the Supabase dashboard to invite users.' } }
 
     if (error) {
+      // Fallback: show Supabase dashboard link
       setInviteMsg(`⚠️ ${error.message}`)
     } else {
       setInviteMsg(`✅ Invite sent to ${inviteEmail}`)
@@ -148,6 +149,7 @@ export default function UsersSection() {
 
       {/* ── Approved Users ─────────────────────────────────────────────── */}
       <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3">Approved Users</h3>
+      {/* User table */}
       <div className="glass rounded-xl overflow-hidden mb-8">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
@@ -163,6 +165,7 @@ export default function UsersSection() {
               key={p.id}
               className={`flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-4 ${i < approvedProfiles.length - 1 ? 'border-b border-white/5' : ''}`}
             >
+              {/* Avatar + name */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold text-white/60 flex-shrink-0">
                   {(p.display_name || p.user_id)?.[0]?.toUpperCase() ?? '?'}
@@ -172,14 +175,20 @@ export default function UsersSection() {
                     {p.display_name || <span className="text-white/30 italic">No name set</span>}
                     {isMe && <span className="ml-1.5 text-brand-green text-xs">(you)</span>}
                   </p>
-                  {p.technicians && (
+                  <div className="flex flex-col gap-0.5 mt-0.5">
+                    {p.technicians && (
+                      <p className="text-white/30 text-xs">
+                        Linked: {p.technicians.first_name} {p.technicians.last_initial}.
+                      </p>
+                    )}
                     <p className="text-white/30 text-xs">
-                      Linked: {p.technicians.first_name} {p.technicians.last_initial}.
+                      Last logged in: {p.last_sign_in_at ? format(new Date(p.last_sign_in_at), 'MMM d, yyyy h:mm a') : 'Never'}
                     </p>
-                  )}
+                  </div>
                 </div>
               </div>
 
+              {/* Role selector */}
               <select
                 value={p.role}
                 disabled={isSaving || isMe}
@@ -190,6 +199,7 @@ export default function UsersSection() {
                 <option value="manager">Manager</option>
               </select>
 
+              {/* Technician link */}
               <select
                 value={p.technician_id || ''}
                 disabled={isSaving}
@@ -204,6 +214,7 @@ export default function UsersSection() {
                 ))}
               </select>
 
+              {/* Saving indicator */}
               {isSaving && <span className="text-white/30 text-xs animate-pulse">Saving…</span>}
               <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${roleColors[p.role] || 'bg-white/10 text-white/50'}`}>
                 {p.role}
@@ -213,6 +224,7 @@ export default function UsersSection() {
         })}
       </div>
 
+      {/* Invite section */}
       <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3">Invite New User</h3>
       <div className="glass rounded-xl p-4">
         <p className="text-white/30 text-xs mb-4">
@@ -257,6 +269,7 @@ export default function UsersSection() {
             {inviteMsg}
           </p>
         )}
+        {/* Fallback: link to Supabase dashboard */}
         <p className="text-white/20 text-xs mt-4">
           Or invite directly from the{' '}
           <a
