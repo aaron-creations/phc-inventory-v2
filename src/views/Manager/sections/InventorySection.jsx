@@ -475,29 +475,30 @@ export default function InventorySection() {
 
   return (
     <div className="p-6">
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <h2 className="text-white font-bold text-xl flex-1">Inventory</h2>
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-end mb-6">
+        <div>
+          <h2 className="text-white font-bold text-2xl">Inventory</h2>
+          <p className="text-white/40 text-xs mt-1">
+            Total Value: <span className="text-brand-green font-medium">${totalValue.toFixed(2)}</span>
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="glass rounded-lg px-3 py-1.5 hidden sm:block">
-            <span className="text-white/40 text-xs">Total Value: </span>
-            <span className="text-brand-green text-sm font-bold">${totalValue.toFixed(2)}</span>
-          </div>
           <button
             onClick={() => exportCSV(processedProducts)}
-            className="glass rounded-lg px-3 py-1.5 text-white/50 hover:text-brand-green text-xs font-medium transition-colors flex items-center gap-1.5"
+            className="text-white/50 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-xs font-medium flex items-center gap-1.5"
           >
             ⬇ Export CSV
           </button>
           <button
             onClick={() => setEditTarget({ isNew: true })}
-            className="bg-brand-green text-forest-950 font-bold rounded-lg px-4 py-1.5 text-sm hover:bg-brand-green/80 transition-colors flex items-center gap-1.5 shadow-md"
+            className="bg-brand-green text-forest-950 font-bold rounded-lg px-4 py-2 text-sm hover:brightness-110 transition-all flex items-center gap-1.5 shadow-md"
           >
             <span className="text-lg leading-none">+</span> Add Product
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap sm:flex-nowrap gap-3 mb-5">
         <div className="relative flex-1 min-w-[200px]">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm pointer-events-none">🔍</span>
           <input
@@ -505,28 +506,28 @@ export default function InventorySection() {
             placeholder="Search products or category…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:border-brand-green/50 transition-colors"
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-9 py-2 text-white placeholder-white/30 text-sm outline-none focus:border-brand-green/50 transition-colors"
           />
           {search && (
             <button onClick={() => setSearch('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors text-xs">✕</button>
           )}
         </div>
-        <div className="flex gap-2">
+        
+        <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 shrink-0 overflow-x-auto">
           {[
-            { key: 'ok',  label: `✅ OK (${counts.ok})`,   color: '#4ade80' },
-            { key: 'low', label: `⚠️ Low (${counts.low})`, color: '#fb923c' },
-            { key: 'out', label: `🔴 Out (${counts.out})`, color: '#f87171' },
+            { key: 'ok',  label: `✅ OK (${counts.ok})`,   activeColor: 'bg-[#4ade80]/10 text-[#4ade80]' },
+            { key: 'low', label: `⚠️ Low (${counts.low})`, activeColor: 'bg-[#fb923c]/10 text-[#fb923c]' },
+            { key: 'out', label: `🔴 Out (${counts.out})`, activeColor: 'bg-[#f87171]/10 text-[#f87171]' },
           ].map(f => (
             <button
               key={f.key}
               onClick={() => setStatusFilter(prev => prev === f.key ? null : f.key)}
-              style={{
-                backgroundColor: statusFilter === f.key ? `${f.color}18` : 'rgba(255,255,255,0.04)',
-                border: statusFilter === f.key ? `1.5px solid ${f.color}50` : '1px solid rgba(255,255,255,0.08)',
-                color: statusFilter === f.key ? f.color : 'rgba(255,255,255,0.45)',
-              }}
-              className="px-3 py-2 rounded-xl text-xs font-medium transition-all hover:brightness-110 whitespace-nowrap"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                statusFilter === f.key 
+                  ? f.activeColor 
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
             >
               {f.label}
             </button>
