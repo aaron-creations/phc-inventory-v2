@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { format } from 'date-fns'
 import { useAuth } from '../../contexts/AuthContext'
@@ -8,6 +8,7 @@ import LowStockBanner from '../../components/LowStockBanner'
 export default function Dashboard() {
   const [blends, setBlends] = useState([])
   const [products, setProducts] = useState([])
+  const [todaysJobs, setTodaysJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const { isManager, isTechnician, signOut, profile } = useAuth()
@@ -26,16 +27,39 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const [blendRes, prodRes] = await Promise.all([
+      const todayString = format(new Date(), 'yyyy-MM-dd')
+      const [blendRes, prodRes, jobsRes] = await Promise.all([
         supabase.from('blends').select('*').order('name'),
         supabase.from('products').select('id, name, containers_in_stock, low_stock_threshold').order('name'),
+        tech?.id ? supabase.from('crm_jobs')
+          .select('id, service_type, status, crm_properties(address_line1, nickname), crm_customers(last_name)')
+          .eq('technician_id', tech.id)
+          .eq('scheduled_date', todayString)
+          .neq('status', 'cancelled')
+          .order('created_at', { ascending: true }) : Promise.resolve({ data: [] })
       ])
       setBlends(blendRes.data || [])
       setProducts(prodRes.data || [])
+      setTodaysJobs(jobsRes.data || [])
       setLoading(false)
     }
     loadData()
-  }, [])
+  }, [tech?.id])
+
+  async function startJob(jobId) {
+    const { error } = await supabase.from('crm_jobs').update({ status: 'in_progress' }).eq('id', jobId)
+    if (!error) {
+      setTodaysJobs(todaysJobs.map(j => j.id === jobId ? { ...j, status: 'in_progress' } : j))
+      navigate('/log')
+    }
+  }
+
+  async function completeJob(jobId) {
+    const { error } = await supabase.from('crm_jobs').update({ status: 'completed' }).eq('id', jobId)
+    if (!error) {
+      setTodaysJobs(todaysJobs.map(j => j.id === jobId ? { ...j, status: 'completed' } : j))
+    }
+  }
 
   const badgeColors = {
     green:  'border-brand-green text-brand-green bg-brand-green/10',
@@ -46,8 +70,14 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-forest-950 flex flex-col items-center px-4 py-10 max-w-lg mx-auto">
 
-      {/* Header — sign out */}
-      <div className="w-full flex items-center justify-end mb-4">
+      {/* Header — Hub & Sign out */}
+      <div className="w-full flex items-center justify-between mb-4">
+        <Link
+          to="/hub"
+          className="text-white/40 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1"
+        >
+          ← Hub
+        </Link>
         <button
           onClick={signOut}
           className="text-white/25 hover:text-white/60 text-xs transition-colors"
@@ -111,9 +141,53 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Today's Route (Technicians) */}
+      {!isManager && todaysJobs.length > 0 && (
+        <div className="w-full mb-6 relative">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Today's Route</h2>
+            <div className="px-2 py-0.5 rounded-full bg-white/10 text-white/50 text-xs font-bold">{todaysJobs.length}</div>
+          </div>
+          <div className="space-y-3">
+            {todaysJobs.map(job => (
+              <div key={job.id} className="glass rounded-xl p-4 border border-white/5 flex flex-col gap-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <h3 className="text-white font-bold">{job.service_type}</h3>
+                    <p className="text-white/50 text-xs mt-0.5">
+                      {job.crm_customers?.last_name} · {job.crm_properties?.nickname || job.crm_properties?.address_line1}
+                    </p>
+                  </div>
+                  {job.status === 'completed' && (
+                    <span className="px-2 py-1 rounded bg-brand-green/20 text-brand-green text-[10px] font-bold uppercase">Done</span>
+                  )}
+                  {job.status === 'in_progress' && (
+                    <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
+                  )}
+                </div>
+                {job.status === 'scheduled' && (
+                  <button onClick={() => startJob(job.id)} className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-blue-500/20">
+                    Start Job
+                  </button>
+                )}
+                {job.status === 'in_progress' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => navigate('/log')} className="flex-1 py-2 bg-brand-green hover:bg-brand-green/90 text-forest-950 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors">
+                      Log Materials
+                    </button>
+                    <button onClick={() => completeJob(job.id)} className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors">
+                      Mark Complete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Primary Action Buttons */}
       <div className="w-full flex flex-col gap-3 mb-10">
-        {/* Log Usage — available to all approved users */}
         <button
           onClick={() => navigate('/log')}
           className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-green/10 border border-brand-green/30 hover:bg-brand-green/20 hover:border-brand-green/60 transition-all duration-200 group"
@@ -123,7 +197,6 @@ export default function Dashboard() {
           <span className="text-brand-green/40 group-hover:text-brand-green/80 transition-colors">→</span>
         </button>
 
-        {/* Log Restock — manager only */}
         {isManager && (
           <button
             onClick={() => navigate('/restock')}
