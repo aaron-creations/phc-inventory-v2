@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuth } from '../../../contexts/AuthContext'
-import { ArrowLeft, Plus, Save, X, Wrench, Settings } from 'lucide-react'
+import { ArrowLeft, Plus, Save, X, Wrench, Settings, Edit2, Trash2 } from 'lucide-react'
 
 export default function AssetDetail() {
   const { id } = useParams()
@@ -17,6 +17,7 @@ export default function AssetDetail() {
   
   // Log Add State
   const [isLogging, setIsLogging] = useState(false)
+  const [editingLogId, setEditingLogId] = useState(null)
   const [newLog, setNewLog] = useState({
     service_type: '',
     description: '',
@@ -76,26 +77,86 @@ export default function AssetDetail() {
       next_due_miles_hours: newLog.next_due_miles_hours ? parseInt(newLog.next_due_miles_hours) : null
     }
 
-    const { data, error } = await supabase
-      .from('fleet_maintenance_logs')
-      .insert([payload])
-      .select(`
-        *,
-        technicians (first_name, last_initial)
-      `)
-      .single()
+    let errorObj = null;
+    let savedData = null;
+
+    if (editingLogId) {
+      const updatePayload = { ...payload }
+      delete updatePayload.technician_id // keep original creator
+
+      const { data, error } = await supabase
+        .from('fleet_maintenance_logs')
+        .update(updatePayload)
+        .eq('id', editingLogId)
+        .select(`
+          *,
+          technicians (first_name, last_initial)
+        `)
+        .single()
+      errorObj = error
+      savedData = data
+    } else {
+      const { data, error } = await supabase
+        .from('fleet_maintenance_logs')
+        .insert([payload])
+        .select(`
+          *,
+          technicians (first_name, last_initial)
+        `)
+        .single()
+      errorObj = error
+      savedData = data
+    }
 
     setSubmitting(false)
 
-    if (error) {
-      alert(`Error saving log: ${error.message}`)
+    if (errorObj) {
+      alert(`Error saving log: ${errorObj.message}`)
     } else {
-      setLogs([data, ...logs])
-      setIsLogging(false)
-      setNewLog({
-        service_type: '', description: '', service_date: new Date().toISOString().split('T')[0],
-        cost: '', next_due_date: '', next_due_miles_hours: ''
-      })
+      if (editingLogId) {
+        setLogs(logs.map(l => l.id === editingLogId ? savedData : l))
+      } else {
+        setLogs([savedData, ...logs])
+      }
+      cancelLogging()
+    }
+  }
+
+  function cancelLogging() {
+    setIsLogging(false)
+    setEditingLogId(null)
+    setNewLog({
+      service_type: '', description: '', service_date: new Date().toISOString().split('T')[0],
+      cost: '', next_due_date: '', next_due_miles_hours: ''
+    })
+  }
+
+  function handleEdit(log) {
+    setEditingLogId(log.id)
+    setNewLog({
+      service_type: log.service_type || '',
+      description: log.description || '',
+      service_date: log.service_date ? log.service_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      cost: log.cost !== null ? log.cost : '',
+      next_due_date: log.next_due_date ? log.next_due_date.split('T')[0] : '',
+      next_due_miles_hours: log.next_due_miles_hours !== null ? log.next_due_miles_hours : ''
+    })
+    setIsLogging(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this maintenance log?")) return
+    
+    const { error } = await supabase
+      .from('fleet_maintenance_logs')
+      .delete()
+      .eq('id', id)
+      
+    if (error) {
+      alert(`Error deleting log: ${error.message}`)
+    } else {
+      setLogs(logs.filter(l => l.id !== id))
     }
   }
 
@@ -176,8 +237,8 @@ export default function AssetDetail() {
             {isLogging && (
               <div className="mb-8 p-5 bg-black/20 rounded-xl border border-white/10 animate-in fade-in duration-200">
                 <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">New Service Log</h3>
-                  <button onClick={() => setIsLogging(false)} className="text-white/40 hover:text-white"><X size={16} /></button>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">{editingLogId ? 'Edit Service Log' : 'New Service Log'}</h3>
+                  <button type="button" onClick={cancelLogging} className="text-white/40 hover:text-white"><X size={16} /></button>
                 </div>
                 
                 <form onSubmit={handleAddLog} className="space-y-4">
@@ -226,9 +287,19 @@ export default function AssetDetail() {
             ) : (
               <div className="space-y-4">
                 {logs.map(log => (
-                  <div key={log.id} className="p-4 bg-white/[0.02] rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                  <div key={log.id} className="p-4 bg-white/[0.02] rounded-xl border border-white/5 hover:border-white/10 transition-colors group">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-white font-bold leading-tight">{log.service_type}</h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-white font-bold leading-tight">{log.service_type}</h3>
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 transition-opacity">
+                          <button onClick={() => handleEdit(log)} className="text-white/30 hover:text-white transition-colors" title="Edit">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(log.id)} className="text-white/30 hover:text-red-400 transition-colors" title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
                       <span className="text-xs text-brand-green font-mono">
                         {log.cost ? `$${log.cost.toFixed(2)}` : ''}
                       </span>
