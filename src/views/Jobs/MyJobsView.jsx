@@ -38,7 +38,7 @@ export default function MyJobsView() {
         crm_properties ( address_line1, city, state, zip, nickname, access_notes )
       `)
       .eq('technician_id', techId)
-      .in('status', ['scheduled', 'in_progress'])
+      .in('status', ['scheduled', 'Scheduled', 'in_progress', 'In Progress', 'In_progress'])
       .lte('scheduled_date', todayStr)
       .order('scheduled_date', { ascending: true })
 
@@ -107,17 +107,17 @@ export default function MyJobsView() {
             <div key={job.id} className="p-5 bg-white/[0.02] rounded-xl border border-white/5 hover:border-white/10 transition-colors">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${job.status === 'in_progress' ? 'bg-orange-400 animate-pulse' : 'bg-blue-400'}`}></span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${job.status?.toLowerCase() === 'in_progress' || job.status?.toLowerCase() === 'in progress' ? 'bg-orange-400 animate-pulse' : 'bg-blue-400'}`}></span>
                   <span className="text-white/50 text-xs font-bold uppercase tracking-wider">
                     {job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric'}) : 'Unscheduled'}
                   </span>
                 </div>
                 
                 <select 
-                  value={job.status || 'scheduled'}
+                  value={(job.status?.toLowerCase() === 'in progress' || job.status?.toLowerCase() === 'in_progress') ? 'in_progress' : job.status?.toLowerCase() === 'completed' ? 'completed' : 'scheduled'}
                   onChange={(e) => updateJobStatus(job.id, e.target.value)}
                   className={`text-xs font-semibold px-2 py-1 rounded outline-none appearance-none cursor-pointer border ${
-                    job.status === 'in_progress' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 
+                    (job.status?.toLowerCase() === 'in progress' || job.status?.toLowerCase() === 'in_progress') ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 
                     'bg-blue-500/20 text-blue-400 border-blue-500/30'
                   }`}
                 >
