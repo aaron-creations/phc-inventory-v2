@@ -190,6 +190,18 @@ export default function Dashboard() {
 
       {/* Primary Action Buttons */}
       <div className="w-full flex flex-col gap-3 mb-10">
+        {/* Manager Panel — manager only */}
+        {isManager && (
+          <button
+            onClick={() => navigate('/manager')}
+            className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-500/60 transition-all duration-200 group shadow-lg shadow-blue-500/5"
+          >
+            <span className="text-2xl">👑</span>
+            <span className="text-blue-400 font-semibold text-base flex-1 text-left">Manager Panel</span>
+            <span className="text-blue-400/40 group-hover:text-blue-400/80 transition-colors">→</span>
+          </button>
+        )}
+
         {/* Log Usage — available to all approved users */}
         <button
           onClick={() => navigate('/log')}
