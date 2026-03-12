@@ -3,8 +3,6 @@ import { supabase } from '../../../lib/supabaseClient'
 
 export default function SettingsSection() {
   const [thresholdInput, setThresholdInput] = useState('0.5')
-  const [emailInput, setEmailInput] = useState('')
-  const [passwordInput, setPasswordInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -14,25 +12,12 @@ export default function SettingsSection() {
       const threshold = data.find(s => s.key === 'default_low_stock_threshold')
       if (threshold) setThresholdInput(threshold.value)
     })
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user?.email) setEmailInput(data.user.email)
-    })
   }, [])
 
   async function saveThreshold() {
     setSaving(true)
     await supabase.from('settings')
       .upsert({ key: 'default_low_stock_threshold', value: thresholdInput })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    setSaving(false)
-  }
-
-  async function updatePassword() {
-    if (!passwordInput.trim()) return
-    setSaving(true)
-    await supabase.auth.updateUser({ password: passwordInput })
-    setPasswordInput('')
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
     setSaving(false)
@@ -67,6 +52,7 @@ export default function SettingsSection() {
         </div>
       )}
 
+      {/* Low Stock Threshold */}
       <section className="glass rounded-xl p-4 mb-4">
         <h3 className="text-white/70 font-semibold text-sm mb-1">Low Stock Threshold</h3>
         <p className="text-white/30 text-xs mb-3">Default minimum containers before a product is flagged as "Low Stock".</p>
@@ -80,20 +66,7 @@ export default function SettingsSection() {
         </div>
       </section>
 
-      <section className="glass rounded-xl p-4 mb-4">
-        <h3 className="text-white/70 font-semibold text-sm mb-1">Manager Password</h3>
-        <p className="text-white/30 text-xs mb-3">Update the Supabase Auth password for your manager account.</p>
-        <p className="text-white/40 text-xs mb-2">Email: <span className="text-white/60">{emailInput}</span></p>
-        <div className="flex gap-2">
-          <input type="password" placeholder="New password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50 placeholder-white/30" />
-          <button onClick={updatePassword} disabled={saving || !passwordInput}
-            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm disabled:opacity-40 transition-all">
-            Update
-          </button>
-        </div>
-      </section>
-
+      {/* Export */}
       <section className="glass rounded-xl p-4">
         <h3 className="text-white/70 font-semibold text-sm mb-1">Export All Data</h3>
         <p className="text-white/30 text-xs mb-3">Download a full CSV of all transaction history.</p>
