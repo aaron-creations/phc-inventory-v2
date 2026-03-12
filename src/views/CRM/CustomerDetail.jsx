@@ -363,20 +363,20 @@ export default function CustomerDetail() {
                 {jobs.map(job => (
                   <div key={job.id} className="relative pl-4 border-l-2 border-white/10 pb-4 last:pb-0 last:border-transparent">
                     <div className={`absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ring-4 ring-forest-900 ${
-                      job.status === 'completed' ? 'bg-brand-green' : 
-                      job.status === 'in_progress' ? 'bg-orange-400' : 'bg-blue-400'
+                      job.status?.toLowerCase() === 'completed' ? 'bg-brand-green' : 
+                      job.status?.toLowerCase() === 'in_progress' ? 'bg-orange-400' : 'bg-blue-400'
                     }`} />
                     
                     <div className="flex justify-between items-start gap-2 mb-1">
                       <div className="font-medium text-white text-sm flex items-center gap-2">
                         {job.service_type}
-                        {job.status === 'scheduled' && (
+                        {job.status?.toLowerCase() === 'scheduled' && (
                           <span className="text-[10px] text-blue-400 uppercase tracking-wider font-bold bg-blue-400/10 px-1.5 py-0.5 rounded">(Upcoming)</span>
                         )}
-                        {job.status === 'in_progress' && (
+                        {job.status?.toLowerCase() === 'in_progress' && (
                           <span className="text-[10px] text-orange-400 uppercase tracking-wider font-bold bg-orange-400/10 px-1.5 py-0.5 rounded">(In Progress)</span>
                         )}
-                        {job.status === 'completed' && (
+                        {job.status?.toLowerCase() === 'completed' && (
                           <span className="text-[10px] text-brand-green uppercase tracking-wider font-bold bg-brand-green/10 px-1.5 py-0.5 rounded">(Complete)</span>
                         )}
                       </div>
@@ -390,7 +390,7 @@ export default function CustomerDetail() {
                         <div className="flex items-center gap-1"><MapPin size={12}/> {job.crm_properties.nickname || job.crm_properties.address_line1}</div>
                       )}
                       {job.technicians && (
-                        <div className="flex items-center gap-1"><User size={12}/> {job.technicians.first_name}</div>
+                        <div className="flex items-center gap-1"><User size={12}/> {job.technicians.first_name} {job.technicians.last_initial}.</div>
                       )}
                     </div>
                   </div>
