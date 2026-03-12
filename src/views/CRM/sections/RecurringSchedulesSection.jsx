@@ -1,20 +1,288 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../../../lib/supabaseClient'
+import { Clock, RefreshCw, MapPin, User, PauseCircle, PlayCircle, Trash2, Edit, X } from 'lucide-react'
 
 export default function RecurringSchedulesSection() {
-  const [schedules, setSchedules] = useState([]) // Placeholder
+  const [schedules, setSchedules] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [technicians, setTechnicians] = useState([])
+
+  useEffect(() => {
+    fetchSchedules()
+    fetchTechnicians()
+  }, [])
+
+  async function fetchTechnicians() {
+    const { data } = await supabase.from('technicians').select('id, first_name, last_initial')
+    if (data) setTechnicians(data)
+  }
+
+  async function fetchSchedules() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('crm_recurring_schedules')
+      .select(`
+        *,
+        crm_customers ( first_name, last_name, company_name ),
+        crm_properties ( address_line1, nickname ),
+        technicians ( first_name, last_initial )
+      `)
+      .order('created_at', { ascending: false })
+      
+    if (error) {
+      console.error(error)
+    } else {
+      setSchedules(data || [])
+    }
+    setLoading(false)
+  }
+
+  async function toggleStatus(id, currentStatus) {
+    const newStatus = currentStatus === 'active' ? 'paused' : 'active'
+    const { error } = await supabase.from('crm_recurring_schedules').update({ status: newStatus }).eq('id', id)
+    if (!error) {
+      setSchedules(schedules.map(s => s.id === id ? { ...s, status: newStatus } : s))
+    }
+  }
+
+  async function deleteSchedule(id) {
+    if (confirm('Are you sure you want to delete this recurring schedule? Future jobs will stop generating. Already generated jobs will remain.')) {
+      const { error } = await supabase.from('crm_recurring_schedules').delete().eq('id', id)
+      if (error) alert(`Error deleting schedule: ${error.message}`)
+      else setSchedules(schedules.filter(s => s.id !== id))
+    }
+  }
+
+  async function manuallyRunGeneration() {
+    setGenerating(true)
+    const { error } = await supabase.rpc('generate_upcoming_recurring_jobs')
+    setGenerating(false)
+    if (error) {
+      alert(`Error generating jobs: ${error.message}`)
+    } else {
+      alert('Successfully scanned and generated upcoming recurring jobs.')
+      fetchSchedules() // To update last_generated_date
+    }
+  }
+
+  function openEdit(schedule) {
+    setEditForm({
+      id: schedule.id,
+      service_type: schedule.service_type,
+      quoted_price: schedule.quoted_price || '',
+      technician_id: schedule.technician_id || '',
+      frequency: schedule.frequency,
+      interval_days: schedule.interval_days || '',
+      customer_name: `${schedule.crm_customers?.first_name} ${schedule.crm_customers?.last_name}`,
+      property_name: schedule.crm_properties?.address_line1
+    })
+    setIsEditing(true)
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault()
+    setSavingEdit(true)
+    
+    const { error } = await supabase.from('crm_recurring_schedules').update({
+      service_type: editForm.service_type,
+      quoted_price: editForm.quoted_price ? parseFloat(editForm.quoted_price) : null,
+      technician_id: editForm.technician_id || null,
+      frequency: editForm.frequency,
+      interval_days: editForm.frequency === 'custom' ? parseInt(editForm.interval_days) : null
+    }).eq('id', editForm.id)
+    
+    setSavingEdit(false)
+    if (error) {
+      alert(`Error updating schedule: ${error.message}`)
+    } else {
+      setIsEditing(false)
+      fetchSchedules()
+    }
+  }
+
+  if (loading) return (
+    <div className="p-8 flex items-center justify-center h-full"><div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white animate-spin"></div></div>
+  )
 
   return (
-    <div className="p-4 flex flex-col h-full items-center justify-center text-center">
-      <div className="max-w-md space-y-4">
-        <span className="text-6xl block mb-4">🗓️</span>
-        <h2 className="text-2xl font-bold text-white">Recurring Programs</h2>
-        <p className="text-white/50 text-sm leading-relaxed">
-          Create service templates (e.g., "5-Step Lawn Care", "Monthly Mosquito Tick") and assign them to properties to automatically generate job entries throughout the season.
-        </p>
-        <div className="inline-block mt-4 px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 text-xs font-bold uppercase tracking-widest">
-          Coming Soon
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-white mb-1">Recurring Schedules</h1>
+          <p className="text-sm text-white/40">Manage automated repeating services.</p>
         </div>
+        
+        <button
+          onClick={manuallyRunGeneration}
+          disabled={generating}
+          className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
+          title="Manually trigger the cron job to generate upcoming instances"
+        >
+          <RefreshCw size={16} className={generating ? "animate-spin" : ""} />
+          {generating ? 'Running...' : 'Run Generation Batch Now'}
+        </button>
       </div>
+
+      <div className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
+        {schedules.length === 0 ? (
+          <div className="p-8 text-center text-white/40">
+            No recurring schedules found. You can set them up when scheduling a job.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5 bg-black/20">
+                  <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Service</th>
+                  <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Customer / Property</th>
+                  <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Frequency</th>
+                  <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Next Auto-Gen</th>
+                  <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {schedules.map(schedule => (
+                  <tr key={schedule.id} className={`hover:bg-white/[0.02] transition-colors group ${schedule.status !== 'active' ? 'opacity-50' : ''}`}>
+                    <td className="p-4 align-top">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${schedule.status === 'active' ? 'bg-brand-green' : 'bg-red-500'}`} title={schedule.status} />
+                        <div className="text-white font-medium">{schedule.service_type}</div>
+                      </div>
+                      <div className="text-white/40 text-xs pl-4">
+                        {schedule.technicians ? `${schedule.technicians.first_name} ${schedule.technicians.last_initial}.` : 'Unassigned'}
+                        {schedule.quoted_price && <span className="ml-2">${schedule.quoted_price}</span>}
+                      </div>
+                    </td>
+                    <td className="p-4 align-top">
+                      <div className="text-white/80 font-medium text-sm flex items-center gap-1.5 mb-1">
+                        <User size={12} className="text-white/30"/> 
+                        {schedule.crm_customers?.first_name} {schedule.crm_customers?.last_name}
+                      </div>
+                      <div className="text-white/50 text-xs flex items-center gap-1.5">
+                        <MapPin size={12} className="text-white/30"/>
+                        {schedule.crm_properties?.nickname || schedule.crm_properties?.address_line1}
+                      </div>
+                    </td>
+                    <td className="p-4 align-top">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded text-xs text-white/70 capitalize">
+                        <Clock size={12} className="text-blue-400" />
+                        {schedule.frequency} 
+                        {schedule.frequency === 'custom' && ` (${schedule.interval_days} days)`}
+                      </div>
+                    </td>
+                    <td className="p-4 align-top">
+                      <div className="text-white/60 text-sm">
+                        {schedule.last_generated_date ? new Date(schedule.last_generated_date + 'T12:00:00').toLocaleDateString() : 'Pending'}
+                      </div>
+                      <div className="text-white/30 text-[10px] mt-0.5 uppercase tracking-wide">
+                        {schedule.status === 'active' ? 'Date generated up to' : 'Paused'}
+                      </div>
+                    </td>
+                    <td className="p-4 align-top text-right">
+                      <div className="flex justify-end items-center gap-2">
+                        <button 
+                          onClick={() => toggleStatus(schedule.id, schedule.status)} 
+                          className={`p-1.5 rounded-lg transition-colors ${schedule.status === 'active' ? 'text-orange-400 hover:bg-orange-400/10' : 'text-brand-green hover:bg-brand-green/10'}`} 
+                          title={schedule.status === 'active' ? 'Pause Schedule' : 'Resume Schedule'}
+                        >
+                          {schedule.status === 'active' ? <PauseCircle size={18} /> : <PlayCircle size={18} />}
+                        </button>
+                        <button 
+                          onClick={() => openEdit(schedule)} 
+                          className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" 
+                          title="Edit Schedule"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button 
+                          onClick={() => deleteSchedule(schedule.id)} 
+                          className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" 
+                          title="Delete Schedule"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-forest-900 border border-white/10 p-6 rounded-xl w-full max-w-lg shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-serif font-bold text-white mb-1">Edit Recurring Schedule</h2>
+                <div className="text-xs text-white/50">{editForm.customer_name} • {editForm.property_name}</div>
+              </div>
+              <button title="Close" onClick={() => setIsEditing(false)} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Service Type *</label>
+                <input required value={editForm.service_type || ''} onChange={e => setEditForm({...editForm, service_type: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Quoted Price ($)</label>
+                  <input type="number" step="0.01" min="0" value={editForm.quoted_price} onChange={e => setEditForm({...editForm, quoted_price: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                </div>
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Assign To Technician</label>
+                  <select value={editForm.technician_id} onChange={e => setEditForm({...editForm, technician_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                    <option value="" className="bg-forest-900">Unassigned</option>
+                    {technicians.map(t => (
+                      <option key={t.id} value={t.id} className="bg-forest-900">{t.first_name} {t.last_initial}.</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 bg-black/20 p-4 rounded-xl border border-white/10 mt-2">
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Frequency</label>
+                  <select value={editForm.frequency} onChange={e => setEditForm({...editForm, frequency: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                    <option value="weekly" className="bg-forest-900">Weekly</option>
+                    <option value="biweekly" className="bg-forest-900">Bi-Weekly</option>
+                    <option value="monthly" className="bg-forest-900">Monthly</option>
+                    <option value="quarterly" className="bg-forest-900">Quarterly</option>
+                    <option value="yearly" className="bg-forest-900">Yearly</option>
+                    <option value="custom" className="bg-forest-900">Custom Days</option>
+                  </select>
+                </div>
+                {editForm.frequency === 'custom' && (
+                  <div>
+                    <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Every X Days</label>
+                    <input type="number" min="1" required={editForm.frequency === 'custom'} value={editForm.interval_days} onChange={e => setEditForm({...editForm, interval_days: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={savingEdit || !editForm.service_type} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

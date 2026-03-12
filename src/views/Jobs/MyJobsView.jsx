@@ -1,229 +1,176 @@
-import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { format } from 'date-fns'
+import { MapPin, Phone } from 'lucide-react'
 
 export default function MyJobsView() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
-  const { profile } = useAuth()
   const navigate = useNavigate()
-  
+  const { profile } = useAuth()
+
   const techId = profile?.technicians?.id
 
   useEffect(() => {
-    async function loadJobs() {
-      if (!techId) {
-        setLoading(false)
-        return
-      }
-
-      setLoading(true)
-      const { data } = await supabase
-        .from('crm_jobs')
-        .select(`
-          id,
-          service_type,
-          status,
-          scheduled_date,
-          created_at,
-          crm_properties ( address_line1, city, nickname ),
-          crm_customers ( first_name, last_name, phone_mobile, company_name )
-        `)
-        .eq('technician_id', techId)
-        .order('scheduled_date', { ascending: true }) // Earliest first
-        
-      setJobs(data || [])
+    if (!techId) {
       setLoading(false)
+      return
     }
-
     loadJobs()
   }, [techId])
 
-  // Group jobs by status relative to today
-  const todayString = format(new Date(), 'yyyy-MM-dd')
-  
-  const todaysJobs = jobs.filter(j => j.scheduled_date === todayString && j.status !== 'completed' && j.status !== 'cancelled')
-  const inProgressJobs = jobs.filter(j => j.status === 'in_progress' && j.scheduled_date !== todayString)
-  const upcomingJobs = jobs.filter(j => j.scheduled_date > todayString && j.status !== 'cancelled' && j.status !== 'completed')
-  const pastJobs = jobs.filter(j => j.scheduled_date < todayString || j.status === 'completed')
+  async function loadJobs() {
+    setLoading(true)
 
-  async function updateStatus(jobId, newStatus) {
-    const { error } = await supabase.from('crm_jobs').update({ status: newStatus }).eq('id', jobId)
+    // Get today's local date string in YYYY-MM-DD format
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const todayStr = `${year}-${month}-${day}`
+
+    const { data } = await supabase
+      .from('crm_jobs')
+      .select(`
+        *,
+        crm_customers ( first_name, last_name, phone_mobile ),
+        crm_properties ( address_line1, city, state, zip, nickname, access_notes )
+      `)
+      .eq('technician_id', techId)
+      .in('status', ['scheduled', 'Scheduled', 'in_progress', 'In Progress', 'In_progress'])
+      .lte('scheduled_date', todayStr)
+      .order('scheduled_date', { ascending: true })
+
+    setJobs(data || [])
+    setLoading(false)
+  }
+
+  async function updateJobStatus(jobId, newStatus) {
+    if (newStatus === 'completed' && !window.confirm("Mark this job as completed?")) return
+    
+    // In a full implementation, you'd probably require checking if logs were submitted for this job,
+    // but for now we just change the CRM status.
+    const { error } = await supabase
+      .from('crm_jobs')
+      .update({ status: newStatus })
+      .eq('id', jobId)
+
     if (!error) {
-      setJobs(jobs.map(j => j.id === jobId ? { ...j, status: newStatus } : j))
+      if (newStatus === 'completed') {
+        setJobs(jobs.filter(j => j.id !== jobId))
+      } else {
+        setJobs(jobs.map(j => j.id === jobId ? { ...j, status: newStatus } : j))
+      }
     } else {
-      alert("Failed to update status")
+      alert(`Error updating job status: ${error.message}`)
     }
   }
 
-  function renderJobCard(job, showDate = false) {
-    const cust = job.crm_customers
-    const prop = job.crm_properties
-    
+  if (loading) {
     return (
-      <div key={job.id} className="glass rounded-xl p-4 border border-white/5 relative overflow-hidden group">
-        <div className={`absolute top-0 left-0 bottom-0 w-1 ${
-          job.status === 'completed' ? 'bg-brand-green/50' :
-          job.status === 'in_progress' ? 'bg-brand-orange' :
-          job.status === 'cancelled' ? 'bg-red-500/50' :
-          'bg-blue-500/50'
-        }`} />
-        
-        <div className="pl-3">
-          <div className="flex justify-between items-start gap-2 mb-2">
-            <div>
-              <h3 className="text-white font-bold leading-tight">{job.service_type}</h3>
-              <p className="text-white/70 text-sm mt-0.5">
-                {cust?.company_name || `${cust?.first_name} ${cust?.last_name}`}
-              </p>
-            </div>
-            {showDate && (
-              <span className="text-brand-green/80 text-xs font-mono font-bold bg-brand-green/10 px-2 py-1 rounded">
-                {format(new Date(job.scheduled_date), 'MMM d')}
-              </span>
-            )}
-          </div>
-          
-          <div className="space-y-1 mb-4">
-            <p className="text-white/50 text-xs flex items-center gap-1.5">
-              <span>📍</span> {prop?.address_line1}{prop?.city ? `, ${prop.city}` : ''}
-              {prop?.nickname && ` (${prop.nickname})`}
-            </p>
-            {cust?.phone_mobile && (
-              <p className="text-white/50 text-xs flex items-center gap-1.5">
-                <span>📱</span> {cust.phone_mobile}
-              </p>
-            )}
-          </div>
-          
-          {/* Actions based on Job Status */}
-          {job.status === 'scheduled' && (
-            <button
-              onClick={() => updateStatus(job.id, 'in_progress')}
-              className="w-full py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-lg border border-blue-500/20 transition-colors"
-            >
-              Start Job Now
-            </button>
-          )}
-          
-          {job.status === 'in_progress' && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => navigate('/log', { state: { selectedJobId: job.id, selectedDate: job.scheduled_date } })}
-                className="flex-1 py-2.5 bg-brand-green hover:bg-brand-green/90 text-forest-950 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors"
-              >
-                Log Mats
-              </button>
-              <button
-                onClick={() => updateStatus(job.id, 'completed')}
-                className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors"
-              >
-                Complete
-              </button>
-            </div>
-          )}
-          
-          {job.status === 'completed' && (
-            <div className="text-center py-2 text-brand-green/50 text-xs font-bold uppercase tracking-widest border border-brand-green/10 rounded-lg bg-brand-green/5">
-              Completed
-            </div>
-          )}
-        </div>
+      <div className="p-8 flex items-center justify-center min-h-screen bg-forest-950">
+        <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-brand-green animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (!techId) {
+    return (
+      <div className="min-h-screen bg-forest-950 flex flex-col items-center justify-center p-8 text-center text-white/50">
+        <p>You must be linked to a Technician profile to view jobs.</p>
+        <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 border border-white/20 rounded-lg hover:bg-white/5 transition-colors text-white">Back to Dashboard</button>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-forest-950 flex flex-col p-4">
+    <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6 sticky top-0 bg-forest-950/80 backdrop-blur-md pt-2 pb-4 z-10 border-b border-white/10">
-        <Link
-          to="/"
-          className="p-2 -ml-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-        >
-          ←
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-white leading-tight">My Jobs Route</h1>
-          <p className="text-brand-green text-sm flex items-center gap-1.5 font-medium">
-            <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />
-            Live Schedule
-          </p>
+      <div className="flex items-center mb-8 sticky top-0 bg-forest-950/90 backdrop-blur pb-4 z-10 pt-2">
+        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">← Back</button>
+        <h1 className="text-white font-bold text-lg flex-[2] text-center truncate px-2">
+          My Schedule
+        </h1>
+        <div className="flex-1 text-right">
+          <span className="text-xs font-bold text-brand-green uppercase tracking-wider bg-brand-green/10 px-2 py-1 rounded-full">{jobs.length} Jobs</span>
         </div>
       </div>
 
-      {!techId ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-white/50 space-y-2">
-          <span className="text-4xl">👤</span>
-          <p>Your account is not linked to a Technician profile.</p>
-        </div>
-      ) : loading ? (
-        <div className="space-y-4">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-32 bg-white/5 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-white/40 space-y-3">
-          <span className="text-5xl opacity-50">🏝️</span>
-          <p className="text-sm">You have no scheduled jobs.</p>
+      {jobs.length === 0 ? (
+        <div className="text-center p-8 bg-black/20 rounded-xl border border-white/5">
+          <p className="text-white/40 text-sm">You have no active jobs scheduled for today.</p>
         </div>
       ) : (
-        <div className="space-y-8 pb-10">
-          
-          {/* Active / In Progress (Catch-all for paused/day-spanning jobs) */}
-          {inProgressJobs.length > 0 && (
-            <section>
-               <h2 className="text-xs font-bold text-brand-orange uppercase tracking-widest mb-3 flex items-center gap-2">
-                <span>In Progress</span>
-                <div className="h-px bg-brand-orange/20 flex-1" />
-              </h2>
-              <div className="space-y-3">
-                {inProgressJobs.map(j => renderJobCard(j, true))}
+        <div className="space-y-4">
+          {jobs.map(job => (
+            <div key={job.id} className="p-5 bg-white/[0.02] rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${job.status?.toLowerCase() === 'in_progress' || job.status?.toLowerCase() === 'in progress' ? 'bg-orange-400 animate-pulse' : 'bg-blue-400'}`}></span>
+                  <span className="text-white/50 text-xs font-bold uppercase tracking-wider">
+                    {job.scheduled_date ? new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric'}) : 'Unscheduled'}
+                  </span>
+                </div>
+                
+                <select 
+                  value={(job.status?.toLowerCase() === 'in progress' || job.status?.toLowerCase() === 'in_progress') ? 'in_progress' : job.status?.toLowerCase() === 'completed' ? 'completed' : 'scheduled'}
+                  onChange={(e) => updateJobStatus(job.id, e.target.value)}
+                  className={`text-xs font-semibold px-2 py-1 rounded outline-none appearance-none cursor-pointer border ${
+                    (job.status?.toLowerCase() === 'in progress' || job.status?.toLowerCase() === 'in_progress') ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 
+                    'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  }`}
+                >
+                  <option value="scheduled">Scheduled</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
               </div>
-            </section>
-          )}
 
-          {/* Today's Route */}
-          {todaysJobs.length > 0 && (
-            <section>
-              <h2 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <span>Today's Route</span>
-                <span className="bg-blue-500/20 text-blue-400 px-2 rounded-full">{todaysJobs.length}</span>
-                <div className="h-px bg-blue-500/20 flex-1" />
-              </h2>
-              <div className="space-y-3">
-                {todaysJobs.map(j => renderJobCard(j))}
+              <h3 className="text-white font-bold leading-tight text-xl mb-1">{job.service_type}</h3>
+              <div className="flex justify-between items-start mb-4">
+                <p className="text-brand-green text-sm font-medium uppercase tracking-wider">{job.crm_customers?.first_name} {job.crm_customers?.last_name}</p>
+                {job.crm_customers?.phone_mobile && (
+                  <a href={`tel:${job.crm_customers.phone_mobile}`} className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
+                    <Phone size={12} /> {job.crm_customers.phone_mobile}
+                  </a>
+                )}
               </div>
-            </section>
-          )}
+              
+              <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
+                <div className="flex items-start gap-3">
+                  <MapPin size={16} className="text-white/30 shrink-0 mt-0.5" />
+                  <div>
+                    <a 
+                      href={`https://maps.google.com/?q=${encodeURIComponent(`${job.crm_properties?.address_line1}, ${job.crm_properties?.city || ''}, ${job.crm_properties?.state || ''} ${job.crm_properties?.zip || ''}`.trim())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/80 text-sm hover:text-blue-400 transition-colors flex items-center gap-1"
+                      title="Open in Google Maps"
+                    >
+                      {job.crm_properties?.address_line1} <span className="text-[10px] text-blue-400/50 uppercase tracking-wider font-bold ml-1">(Map)</span>
+                    </a>
+                    <div className="text-white/40 text-xs mt-0.5">{job.crm_properties?.city}{job.crm_properties?.state ? `, ${job.crm_properties.state}` : ''}{job.crm_properties?.zip ? ` ${job.crm_properties.zip}` : ''} {job.crm_properties?.nickname && `(${job.crm_properties.nickname})`}</div>
+                  </div>
+                </div>
 
-          {/* Upcoming */}
-          {upcomingJobs.length > 0 && (
-            <section>
-              <h2 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3 mt-6">
-                Upcoming Next
-              </h2>
-              <div className="space-y-3">
-                {upcomingJobs.map(j => renderJobCard(j, true))}
+                {job.crm_properties?.access_notes && (
+                  <div className="mt-2 text-xs text-orange-200/80 bg-orange-500/10 px-3 py-2 rounded-lg leading-relaxed">
+                    <strong className="text-orange-400">NOTE:</strong> {job.crm_properties.access_notes}
+                  </div>
+                )}
               </div>
-            </section>
-          )}
-
-          {/* Past/Completed (Limit to last 5 for brevity) */}
-          {pastJobs.length > 0 && (
-             <section className="opacity-70">
-              <h2 className="text-xs font-bold text-white/30 uppercase tracking-widest mb-3 mt-6 flex justify-between">
-                <span>Recently Completed</span>
-              </h2>
-              <div className="space-y-3">
-                {pastJobs.slice(0, 5).map(j => renderJobCard(j, true))}
+              
+              <div className="mt-5 flex gap-2">
+                <button 
+                  onClick={() => navigate('/log', { state: { selectedJobId: job.id, selectedDate: job.scheduled_date }})} 
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5 flex items-center justify-center"
+                >
+                  Log Usage
+                </button>
               </div>
-             </section>
-          )}
-
+            </div>
+          ))}
         </div>
       )}
     </div>
