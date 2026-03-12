@@ -26,7 +26,7 @@ export default function CustomerDetail() {
   const [technicians, setTechnicians] = useState([])
   const [isSchedulingJob, setIsSchedulingJob] = useState(false)
   const [schedulingProperty, setSchedulingProperty] = useState(null)
-  const [newJob, setNewJob] = useState({ service_type: 'Spring Fert', scheduled_date: '', technician_id: '', quoted_price: '', is_recurring: false, frequency: 'monthly', interval_days: '' })
+  const [newJob, setNewJob] = useState({ service_type: 'Spring Fert', scheduled_date: '', technician_id: '', quoted_price: '' })
   const [isScheduling, setIsScheduling] = useState(false)
 
   useEffect(() => {
@@ -368,8 +368,19 @@ export default function CustomerDetail() {
                     }`} />
                     
                     <div className="flex justify-between items-start gap-2 mb-1">
-                      <div className="font-medium text-white text-sm">{job.service_type}</div>
-                      <div className="text-xs text-white/40 whitespace-nowrap">
+                      <div className="font-medium text-white text-sm flex items-center gap-2">
+                        {job.service_type}
+                        {job.status === 'scheduled' && (
+                          <span className="text-[10px] text-blue-400 uppercase tracking-wider font-bold bg-blue-400/10 px-1.5 py-0.5 rounded">(Upcoming)</span>
+                        )}
+                        {job.status === 'in_progress' && (
+                          <span className="text-[10px] text-orange-400 uppercase tracking-wider font-bold bg-orange-400/10 px-1.5 py-0.5 rounded">(In Progress)</span>
+                        )}
+                        {job.status === 'completed' && (
+                          <span className="text-[10px] text-brand-green uppercase tracking-wider font-bold bg-brand-green/10 px-1.5 py-0.5 rounded">(Complete)</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-white/40 whitespace-nowrap mt-0.5">
                         {job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : 'Unscheduled'}
                       </div>
                     </div>
