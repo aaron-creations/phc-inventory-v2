@@ -160,10 +160,10 @@ export default function Dashboard() {
                     </p>
                   </div>
                   {job.status === 'completed' && (
-                    <span className="px-2 py-1 rounded bg-brand-green/20 text-brand-green text-[10px] font-bold uppercase">Done</span>
+                     <span className="px-2 py-1 rounded bg-brand-green/20 text-brand-green text-[10px] font-bold uppercase">Done</span>
                   )}
                   {job.status === 'in_progress' && (
-                    <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
+                     <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
                   )}
                 </div>
                 
@@ -214,22 +214,27 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className={`w-full grid gap-3 ${isManager ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
-        <NavButton icon="📋" label="My Logs" onClick={() => navigate('/my-logs')} />
-        <NavButton icon="📦" label="Stock" onClick={() => navigate('/stock')} />
-        <NavButton icon="⚖️" label="Mix Rates" onClick={() => navigate('/mix-rates')} />
-        {isManager && (
-          <NavButton icon="⚙" label="Manager" onClick={() => navigate('/manager/dashboard')} />
-        )}
+      <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto">
+        <NavButton icon="🧬" label="Log Usage" to="/log" color="bg-brand-green" />
+        <NavButton icon="🚛" label="Fleet" to="/fleet" />
+        <NavButton icon="📋" label="Mix Rates" to="/mix-rates" />
+        <NavButton icon="📦" label="Stock Levels" to="/stock" />
+        <NavButton icon="🗓️" label="My Jobs" to="/my-jobs" />
+        <NavButton icon="📜" label="My Logs" to="/my-logs" />
       </div>
     </div>
   )
 }
 
-function NavButton({ icon, label, onClick }) {
+function NavButton({ icon, label, to, onClick, color }) {
+  const navigate = useNavigate()
+  
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        if (onClick) onClick()
+        else if (to) navigate(to)
+      }}
       className="flex flex-col items-center gap-1 py-3 rounded-xl glass hover:bg-white/10 transition-all duration-200 text-white/70 hover:text-white"
     >
       <span className="text-lg">{icon}</span>
