@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { MapPin, User, Calendar, CheckCircle2, Phone } from 'lucide-react'
+import { MapPin, Phone } from 'lucide-react'
 
 export default function MyJobsView() {
   const [jobs, setJobs] = useState([])
@@ -22,6 +22,14 @@ export default function MyJobsView() {
 
   async function loadJobs() {
     setLoading(true)
+
+    // Get today's local date string in YYYY-MM-DD format
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const todayStr = `${year}-${month}-${day}`
+
     const { data } = await supabase
       .from('crm_jobs')
       .select(`
@@ -31,26 +39,31 @@ export default function MyJobsView() {
       `)
       .eq('technician_id', techId)
       .in('status', ['scheduled', 'in_progress'])
+      .lte('scheduled_date', todayStr)
       .order('scheduled_date', { ascending: true })
 
     setJobs(data || [])
     setLoading(false)
   }
 
-  async function completeJob(jobId) {
-    if (!window.confirm("Mark this job as completed?")) return
+  async function updateJobStatus(jobId, newStatus) {
+    if (newStatus === 'completed' && !window.confirm("Mark this job as completed?")) return
     
     // In a full implementation, you'd probably require checking if logs were submitted for this job,
     // but for now we just change the CRM status.
     const { error } = await supabase
       .from('crm_jobs')
-      .update({ status: 'completed' })
+      .update({ status: newStatus })
       .eq('id', jobId)
 
     if (!error) {
-      setJobs(jobs.filter(j => j.id !== jobId))
+      if (newStatus === 'completed') {
+        setJobs(jobs.filter(j => j.id !== jobId))
+      } else {
+        setJobs(jobs.map(j => j.id === jobId ? { ...j, status: newStatus } : j))
+      }
     } else {
-      alert(`Error completing job: ${error.message}`)
+      alert(`Error updating job status: ${error.message}`)
     }
   }
 
@@ -86,7 +99,7 @@ export default function MyJobsView() {
 
       {jobs.length === 0 ? (
         <div className="text-center p-8 bg-black/20 rounded-xl border border-white/5">
-          <p className="text-white/40 text-sm">You have no upcoming jobs scheduled.</p>
+          <p className="text-white/40 text-sm">You have no active jobs scheduled for today.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -100,20 +113,25 @@ export default function MyJobsView() {
                   </span>
                 </div>
                 
-                <button 
-                  onClick={() => completeJob(job.id)}
-                  title="Mark as Completed"
-                  className="text-white/30 hover:text-brand-green transition-colors"
+                <select 
+                  value={job.status || 'scheduled'}
+                  onChange={(e) => updateJobStatus(job.id, e.target.value)}
+                  className={`text-xs font-semibold px-2 py-1 rounded outline-none appearance-none cursor-pointer border ${
+                    job.status === 'in_progress' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 
+                    'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  }`}
                 >
-                  <CheckCircle2 size={18} />
-                </button>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
               </div>
 
               <h3 className="text-white font-bold leading-tight text-xl mb-1">{job.service_type}</h3>
               <div className="flex justify-between items-start mb-4">
-                <p className="text-brand-green text-sm font-medium">{job.crm_customers?.first_name} {job.crm_customers?.last_name}</p>
+                <p className="text-brand-green text-sm font-medium uppercase tracking-wider">{job.crm_customers?.first_name} {job.crm_customers?.last_name}</p>
                 {job.crm_customers?.phone_mobile && (
-                  <a href={`tel:${job.crm_customers.phone_mobile}`} className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-1 rounded">
+                  <a href={`tel:${job.crm_customers.phone_mobile}`} className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
                     <Phone size={12} /> {job.crm_customers.phone_mobile}
                   </a>
                 )}
@@ -146,7 +164,7 @@ export default function MyJobsView() {
               <div className="mt-5 flex gap-2">
                 <button 
                   onClick={() => navigate('/log', { state: { selectedJobId: job.id, selectedDate: job.scheduled_date }})} 
-                  className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5"
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5 flex items-center justify-center"
                 >
                   Log Usage
                 </button>
