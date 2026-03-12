@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { MapPin, User, Calendar, CheckCircle2 } from 'lucide-react'
+import { MapPin, User, Calendar, CheckCircle2, Phone } from 'lucide-react'
 
 export default function MyJobsView() {
   const [jobs, setJobs] = useState([])
@@ -110,13 +110,28 @@ export default function MyJobsView() {
               </div>
 
               <h3 className="text-white font-bold leading-tight text-xl mb-1">{job.service_type}</h3>
-              <p className="text-brand-green text-sm font-medium mb-4">{job.crm_customers?.first_name} {job.crm_customers?.last_name}</p>
+              <div className="flex justify-between items-start mb-4">
+                <p className="text-brand-green text-sm font-medium">{job.crm_customers?.first_name} {job.crm_customers?.last_name}</p>
+                {job.crm_customers?.phone_mobile && (
+                  <a href={`tel:${job.crm_customers.phone_mobile}`} className="flex items-center gap-1.5 text-blue-400 text-xs font-semibold hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-1 rounded">
+                    <Phone size={12} /> {job.crm_customers.phone_mobile}
+                  </a>
+                )}
+              </div>
               
               <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
                 <div className="flex items-start gap-3">
                   <MapPin size={16} className="text-white/30 shrink-0 mt-0.5" />
                   <div>
-                    <div className="text-white/80 text-sm">{job.crm_properties?.address_line1}</div>
+                    <a 
+                      href={`https://maps.google.com/?q=${encodeURIComponent(`${job.crm_properties?.address_line1}, ${job.crm_properties?.city || ''}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/80 text-sm hover:text-blue-400 transition-colors flex items-center gap-1"
+                      title="Open in Google Maps"
+                    >
+                      {job.crm_properties?.address_line1} <span className="text-[10px] text-blue-400/50 uppercase tracking-wider font-bold ml-1">(Map)</span>
+                    </a>
                     <div className="text-white/40 text-xs mt-0.5">{job.crm_properties?.city} {job.crm_properties?.nickname && `(${job.crm_properties.nickname})`}</div>
                   </div>
                 </div>

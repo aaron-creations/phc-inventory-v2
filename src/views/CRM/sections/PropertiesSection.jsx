@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronRight } from 'lucide-react'
+import { Search, ChevronRight, Edit, Trash2, X } from 'lucide-react'
 
 export default function PropertiesSection() {
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+
+  const [isEditingProperty, setIsEditingProperty] = useState(false)
+  const [editPropertyForm, setEditPropertyForm] = useState({})
+  const [isUpdatingProperty, setIsUpdatingProperty] = useState(false)
 
   useEffect(() => {
     fetchProperties()
@@ -25,6 +29,43 @@ export default function PropertiesSection() {
       
     if (!error) setProperties(data || [])
     setLoading(false)
+  }
+
+  function openEditProperty(p, e) {
+    if (e) e.stopPropagation()
+    setEditPropertyForm(p)
+    setIsEditingProperty(true)
+  }
+
+  async function handleUpdateProperty(e) {
+    e.preventDefault()
+    setIsUpdatingProperty(true)
+    const { data, error } = await supabase.from('crm_properties').update({
+      nickname: editPropertyForm.nickname,
+      address_line1: editPropertyForm.address_line1,
+      address_line2: editPropertyForm.address_line2,
+      city: editPropertyForm.city,
+      state: editPropertyForm.state,
+      zip: editPropertyForm.zip,
+      access_notes: editPropertyForm.access_notes
+    }).eq('id', editPropertyForm.id).select('*, crm_customers ( id, first_name, last_name, company_name )').single()
+
+    setIsUpdatingProperty(false)
+    if (error) {
+      alert(`Error updating property: ${error.message}`)
+    } else {
+      setProperties(properties.map(p => p.id === data.id ? data : p))
+      setIsEditingProperty(false)
+    }
+  }
+
+  async function handleDeleteProperty(id, e) {
+    if (e) e.stopPropagation()
+    if (confirm('Are you sure you want to delete this property? This might affect existing jobs.')) {
+      const { error } = await supabase.from('crm_properties').delete().eq('id', id)
+      if (error) alert(`Error deleting property: ${error.message}`)
+      else setProperties(properties.filter(p => p.id !== id))
+    }
   }
 
   const filtered = properties.filter(p => {
@@ -103,9 +144,17 @@ export default function PropertiesSection() {
                       <span className="text-white/60 text-sm">{p.city || '—'}</span>
                     </td>
                     <td className="p-4 text-right">
-                      <span className="text-[10px] text-white/20 uppercase tracking-wider group-hover:text-blue-400 transition-colors flex items-center justify-end gap-1">
-                        View Customer <ChevronRight size={14} />
-                      </span>
+                      <div className="flex justify-end items-center gap-2">
+                        <button onClick={(e) => openEditProperty(p, e)} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Edit Property">
+                          <Edit size={16} />
+                        </button>
+                        <button onClick={(e) => handleDeleteProperty(p.id, e)} className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete Property">
+                          <Trash2 size={16} />
+                        </button>
+                        <span className="text-[10px] text-white/20 uppercase tracking-wider group-hover:text-blue-400 transition-colors flex items-center justify-end gap-1 ml-2 border-l border-white/10 pl-2">
+                          Customer <ChevronRight size={14} />
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -114,6 +163,38 @@ export default function PropertiesSection() {
           </div>
         )}
       </div>
+
+      {/* EDIT PROPERTY MODAL */}
+      {isEditingProperty && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-forest-900 border border-white/10 p-6 rounded-xl w-full max-w-lg shadow-2xl relative">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-serif font-bold text-white">Edit Property</h2>
+              <button title="Close" onClick={() => setIsEditingProperty(false)} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateProperty} className="space-y-4">
+              <input required placeholder="Address Line 1" value={editPropertyForm.address_line1 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line1: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              <input placeholder="Address Line 2 (Apt, Suite, etc.)" value={editPropertyForm.address_line2 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line2: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              
+              <div className="grid grid-cols-2 gap-3">
+                <input placeholder="City" value={editPropertyForm.city || ''} onChange={e => setEditPropertyForm({...editPropertyForm, city: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+                <input placeholder="Nickname (e.g. Main House)" value={editPropertyForm.nickname || ''} onChange={e => setEditPropertyForm({...editPropertyForm, nickname: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              </div>
+              
+              <textarea placeholder="Gate codes, dogs, access notes..." value={editPropertyForm.access_notes || ''} onChange={e => setEditPropertyForm({...editPropertyForm, access_notes: e.target.value})} rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              
+              <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setIsEditingProperty(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={isUpdatingProperty || !editPropertyForm.address_line1} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
+                  {isUpdatingProperty ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   )
