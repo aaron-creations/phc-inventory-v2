@@ -1,43 +1,46 @@
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import ManagerDashboard from './sections/ManagerDashboard'
-import InventorySection from './sections/InventorySection'
-import BlendsSection from './sections/BlendsSection'
-import HistorySection from './sections/HistorySection'
-import AnalyticsSection from './sections/AnalyticsSection'
+import LeadsSection from './sections/LeadsSection'
+import CustomersSection from './sections/CustomersSection'
+import PropertiesSection from './sections/PropertiesSection'
+import JobsSection from './sections/JobsSection'
+import RecurringSchedulesSection from './sections/RecurringSchedulesSection'
+import CustomerDetail from './CustomerDetail'
 
 const NAV_ITEMS = [
-  { path: 'dashboard',  label: 'Dashboard',  icon: '📊' },
-  { path: 'analytics',  label: 'Analytics',  icon: '📈' },
-  { path: 'inventory',  label: 'Inventory',  icon: '📦' },
-  { path: 'blends',     label: 'Blends',     icon: '🧬' },
-  { path: 'history',    label: 'History',    icon: '📋' },
+  { path: 'leads',      label: 'Leads',      icon: '🎯' },
+  { path: 'customers',  label: 'Customers',  icon: '🤝' },
+  { path: 'properties', label: 'Properties', icon: '🏠' },
+  { path: 'jobs',       label: 'Jobs',       icon: '🗓️' },
+  { path: 'recurring',  label: 'Recurring',  icon: '🔁' },
 ]
 
-export default function ManagerPanel() {
+export default function CRMShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, signOut } = useAuth()
 
-  const currentPath = location.pathname.split('/manager/')[1]?.split('/')[0] || 'dashboard'
+  // Find the active tab based on the URL path
+  const currentPath = location.pathname.split('/crm/')[1]?.split('/')[0] || 'customers'
 
   return (
     <div className="h-screen overflow-hidden bg-forest-950 flex flex-col md:flex-row w-full">
       {/* Sidebar / Top Nav */}
       <aside className="w-full md:w-52 flex-shrink-0 bg-forest-900 border-b md:border-b-0 md:border-r border-white/5 flex flex-col z-20 shadow-md md:shadow-none">
+        
         {/* Brand */}
         <div className="p-3 md:p-4 border-b border-white/5 flex justify-between items-center md:items-start md:flex-col gap-2.5">
           <div className="flex items-center gap-2.5">
             <img src="/phc-logo.png" alt="PHC" className="w-7 h-7" />
             <div>
-              <p className="text-brand-green text-xs font-semibold tracking-widest uppercase leading-none">Manager</p>
+              <p className="text-blue-400 text-xs font-semibold tracking-widest uppercase leading-none">CRM</p>
               <p className="text-white/25 text-[10px] md:text-xs mt-0.5 truncate max-w-[120px]">{user?.email}</p>
             </div>
           </div>
           
           {/* Mobile-only quick actions header right */}
           <div className="flex md:hidden items-center gap-2">
-            <button onClick={() => navigate('/hub')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-white/50 text-xs hover:bg-white/10" title="Hub">🏠</button>
+            <button onClick={() => navigate('/hub')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-white/50 text-xs hover:bg-white/10" title="Hub">↩</button>
             <button onClick={signOut} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20" title="Sign Out">🚪</button>
           </div>
         </div>
@@ -47,10 +50,10 @@ export default function ManagerPanel() {
           {NAV_ITEMS.map(item => (
             <button
               key={item.path}
-              onClick={() => navigate(`/manager/${item.path}`)}
+              onClick={() => navigate(`/crm/${item.path}`)}
               className={`flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-1.5 md:gap-2.5 px-3 md:px-3 py-2 md:py-2.5 rounded-lg text-xs md:text-sm mb-0 md:mb-0.5 transition-all text-center md:text-left ${
                 currentPath === item.path
-                  ? 'bg-brand-green/15 text-brand-green font-medium'
+                  ? 'bg-blue-500/15 text-blue-400 font-medium'
                   : 'text-white/50 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -66,7 +69,7 @@ export default function ManagerPanel() {
             onClick={() => navigate('/hub')}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-white/40 hover:text-white hover:bg-white/5 transition-all mb-0.5"
           >
-            <span className="w-5 text-center">🏠</span> Back to Hub
+            <span className="w-5 text-center">↩</span> Back to Hub
           </button>
           <button
             onClick={signOut}
@@ -78,14 +81,15 @@ export default function ManagerPanel() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-forest-950">
         <Routes>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard"  element={<ManagerDashboard />} />
-          <Route path="analytics"  element={<AnalyticsSection />} />
-          <Route path="inventory"  element={<InventorySection />} />
-          <Route path="blends"     element={<BlendsSection />} />
-          <Route path="history"    element={<HistorySection />} />
+          <Route path="/" element={<CustomersSection />} />
+          <Route path="leads" element={<LeadsSection />} />
+          <Route path="customers" element={<CustomersSection />} />
+          <Route path="customers/:id" element={<CustomerDetail />} />
+          <Route path="properties" element={<PropertiesSection />} />
+          <Route path="jobs" element={<JobsSection />} />
+          <Route path="recurring" element={<RecurringSchedulesSection />} />
         </Routes>
       </main>
     </div>

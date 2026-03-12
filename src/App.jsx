@@ -5,11 +5,15 @@ import LoginPage from './views/Login/LoginPage'
 import SetPassword from './views/Login/SetPassword'
 import AccessPending from './views/Login/AccessPending'
 import Dashboard from './views/Dashboard/Dashboard'
+import HubPage from './views/Hub/HubPage'
 import LoggingFlow from './views/Logging/LoggingFlow'
 import RestockFlow from './views/Logging/RestockFlow'
 import StockView from './views/Stock/StockView'
 import MixRatesView from './views/MixRates/MixRatesView'
 import ManagerPanel from './views/Manager/ManagerPanel'
+import CRMShell from './views/CRM/CRMShell'
+import FleetShell from './views/Fleet/FleetShell'
+import AdminShell from './views/Admin/AdminShell'
 
 export default function App() {
   return (
@@ -26,17 +30,21 @@ export default function App() {
           <Route path="/access-pending" element={<AccessPending />} />
 
           {/* Protected — any approved user (manager or technician) */}
+          <Route path="/hub"        element={<ProtectedRoute><HubPage /></ProtectedRoute>} />
           <Route path="/"           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/log"        element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
           <Route path="/stock"      element={<ProtectedRoute><StockView /></ProtectedRoute>} />
           <Route path="/mix-rates"  element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
+          <Route path="/fleet/*"    element={<ProtectedRoute><FleetShell /></ProtectedRoute>} />
 
           {/* Manager-only */}
           <Route path="/restock"   element={<ManagerRoute><RestockFlow /></ManagerRoute>} />
           <Route path="/manager/*" element={<ManagerRoute><ManagerPanel /></ManagerRoute>} />
+          <Route path="/crm/*"     element={<ManagerRoute><CRMShell /></ManagerRoute>} />
+          <Route path="/admin/*"   element={<ManagerRoute><AdminShell /></ManagerRoute>} />
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/hub" replace />} />
         </Routes>
       </div>
     </AuthProvider>
