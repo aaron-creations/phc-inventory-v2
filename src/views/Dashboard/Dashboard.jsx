@@ -50,7 +50,7 @@ export default function Dashboard() {
     const { error } = await supabase.from('crm_jobs').update({ status: 'in_progress' }).eq('id', jobId)
     if (!error) {
       setTodaysJobs(todaysJobs.map(j => j.id === jobId ? { ...j, status: 'in_progress' } : j))
-      navigate('/log') // Option to jump straight into logging
+      navigate('/log', { state: { selectedJobId: jobId, selectedDate: format(new Date(), 'yyyy-MM-dd') } }) // Option to jump straight into logging
     }
   }
 
@@ -174,7 +174,7 @@ export default function Dashboard() {
                 )}
                 {job.status === 'in_progress' && (
                   <div className="flex gap-2">
-                    <button onClick={() => navigate('/log')} className="flex-1 py-2 bg-brand-green hover:bg-brand-green/90 text-forest-950 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors">
+                    <button onClick={() => navigate('/log', { state: { selectedJobId: job.id, selectedDate: format(new Date(), 'yyyy-MM-dd') } })} className="flex-1 py-2 bg-brand-green hover:bg-brand-green/90 text-forest-950 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors">
                       Log Materials
                     </button>
                     <button onClick={() => completeJob(job.id)} className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors">

@@ -130,7 +130,7 @@ export default function MyJobsView() {
               
               <div className="mt-5 flex gap-2">
                 <button 
-                  onClick={() => navigate('/log', { state: { selectedJobId: job.id }})} 
+                  onClick={() => navigate('/log', { state: { selectedJobId: job.id, selectedDate: job.scheduled_date }})} 
                   className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5"
                 >
                   Log Usage

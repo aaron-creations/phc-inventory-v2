@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { format } from 'date-fns'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function LoggingFlow() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { profile } = useAuth()
 
   // The technician record is embedded in the profile via the FK join
   const linkedTech = profile?.technicians
 
+  const initialDate = location.state?.selectedDate || format(new Date(), 'yyyy-MM-dd')
+  const initialJobId = location.state?.selectedJobId || ''
+
   const [products, setProducts] = useState([])
   const [blends, setBlends] = useState([])
   const [mode, setMode] = useState('single') // 'single' | 'blend'
-  const [logs, setLogs] = useState([{ productId: '', blendId: '', amount: '', date: format(new Date(), 'yyyy-MM-dd') }])
+  const [logs, setLogs] = useState([{ productId: '', blendId: '', amount: '', date: initialDate }])
   const [blendComponents, setBlendComponents] = useState({}) // blendId -> components[]
   const [jobs, setJobs] = useState([])
-  const [selectedJobId, setSelectedJobId] = useState('')
+  const [selectedJobId, setSelectedJobId] = useState(initialJobId)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 

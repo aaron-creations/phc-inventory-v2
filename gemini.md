@@ -188,6 +188,7 @@ src/
 4. **📍 Job/Location Tagging** — Attach logs to customer or job site
 5. **☁️ PWA / Installable App** — Mobile home screen, offline fallback
 6. **📧 Custom Email Branding** — Supabase custom SMTP for magic link emails
+7. **📋 Job Context Pre-fill** — Auto-populate product/blend based on the scheduled service for a job
 
 ---
 
