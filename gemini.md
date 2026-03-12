@@ -189,6 +189,7 @@ src/
 5. **☁️ PWA / Installable App** — Mobile home screen, offline fallback
 6. **📧 Custom Email Branding** — Supabase custom SMTP for magic link emails
 7. **📋 Job Context Pre-fill** — Auto-populate product/blend based on the scheduled service for a job
+8. **🚜 Job Resource Allocation & Forecasting** — Link jobs to required equipment and inventory to forecast availability and prevent overscheduling. *(⚠️ REQUIRES CONVERSATION WITH NEPHEW to determine exact formulas and math before implementation)*
 
 ---
 
