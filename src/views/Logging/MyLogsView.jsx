@@ -105,7 +105,10 @@ export default function MyLogsView() {
 
   async function saveEdit(log) {
     const newAmount = parseFloat(editAmount)
-    if (isNaN(newAmount) || newAmount < 0) return
+    if (isNaN(newAmount) || newAmount <= 0) {
+      alert("Please enter a valid amount greater than 0.")
+      return
+    }
 
     setSubmitting(true)
     const product = products.find(p => p.id === log.product_id)
@@ -118,6 +121,12 @@ export default function MyLogsView() {
       
       const netChange = oldContainers - newContainers // Positive means adding back to stock, negative means subtracting
       const updatedStock = product.containers_in_stock + netChange
+
+      if (updatedStock < -0.0001) {
+        alert(`Cannot edit log: the new amount exceeds available inventory for ${product.name}.`)
+        setSubmitting(false)
+        return
+      }
 
       // Calculate new cost
       const newCost = recalculateCost(newAmount, product)
@@ -224,7 +233,7 @@ export default function MyLogsView() {
                     <input 
                       type="number" 
                       step="0.01"
-                      min="0"
+                      min="0.01"
                       value={editAmount} 
                       onChange={e => setEditAmount(e.target.value)} 
                       className="flex-1 bg-black/40 border border-brand-green/30 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:border-brand-green/60"
