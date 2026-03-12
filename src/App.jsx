@@ -8,6 +8,7 @@ import Dashboard from './views/Dashboard/Dashboard'
 import HubPage from './views/Hub/HubPage'
 import LoggingFlow from './views/Logging/LoggingFlow'
 import RestockFlow from './views/Logging/RestockFlow'
+import MyLogsView from './views/Logging/MyLogsView'
 import StockView from './views/Stock/StockView'
 import MixRatesView from './views/MixRates/MixRatesView'
 import ManagerPanel from './views/Manager/ManagerPanel'
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/hub"        element={<ProtectedRoute><HubPage /></ProtectedRoute>} />
           <Route path="/"           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/log"        element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
+          <Route path="/my-logs"    element={<ProtectedRoute><MyLogsView /></ProtectedRoute>} />
           <Route path="/stock"      element={<ProtectedRoute><StockView /></ProtectedRoute>} />
           <Route path="/mix-rates"  element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
           <Route path="/fleet/*"    element={<ProtectedRoute><FleetShell /></ProtectedRoute>} />

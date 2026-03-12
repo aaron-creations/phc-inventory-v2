@@ -50,7 +50,7 @@ export default function Dashboard() {
     const { error } = await supabase.from('crm_jobs').update({ status: 'in_progress' }).eq('id', jobId)
     if (!error) {
       setTodaysJobs(todaysJobs.map(j => j.id === jobId ? { ...j, status: 'in_progress' } : j))
-      navigate('/log')
+      navigate('/log') // Option to jump straight into logging
     }
   }
 
@@ -148,6 +148,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Today's Route</h2>
             <div className="px-2 py-0.5 rounded-full bg-white/10 text-white/50 text-xs font-bold">{todaysJobs.length}</div>
           </div>
+          
           <div className="space-y-3">
             {todaysJobs.map(job => (
               <div key={job.id} className="glass rounded-xl p-4 border border-white/5 flex flex-col gap-3">
@@ -165,6 +166,7 @@ export default function Dashboard() {
                     <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
                   )}
                 </div>
+                
                 {job.status === 'scheduled' && (
                   <button onClick={() => startJob(job.id)} className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-blue-500/20">
                     Start Job
@@ -188,6 +190,7 @@ export default function Dashboard() {
 
       {/* Primary Action Buttons */}
       <div className="w-full flex flex-col gap-3 mb-10">
+        {/* Log Usage — available to all approved users */}
         <button
           onClick={() => navigate('/log')}
           className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-green/10 border border-brand-green/30 hover:bg-brand-green/20 hover:border-brand-green/60 transition-all duration-200 group"
@@ -197,6 +200,7 @@ export default function Dashboard() {
           <span className="text-brand-green/40 group-hover:text-brand-green/80 transition-colors">→</span>
         </button>
 
+        {/* Log Restock — manager only */}
         {isManager && (
           <button
             onClick={() => navigate('/restock')}
@@ -210,9 +214,10 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className={`w-full grid gap-3 ${isManager ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <div className={`w-full grid gap-3 ${isManager ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
+        <NavButton icon="📋" label="My Logs" onClick={() => navigate('/my-logs')} />
         <NavButton icon="📦" label="Stock" onClick={() => navigate('/stock')} />
-        <NavButton icon="📋" label="Mix Rates" onClick={() => navigate('/mix-rates')} />
+        <NavButton icon="⚖️" label="Mix Rates" onClick={() => navigate('/mix-rates')} />
         {isManager && (
           <NavButton icon="⚙" label="Manager" onClick={() => navigate('/manager/dashboard')} />
         )}
