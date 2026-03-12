@@ -45,7 +45,7 @@ export function ManagerRoute({ children }) {
   if (session && needsPassword) return <Navigate to="/set-password" replace />
 
   if (profile?.role === 'pending') return <Navigate to="/access-pending" replace />
-  if (profile?.role !== 'manager') return <Navigate to="/" replace />
+  if (profile?.role !== 'manager') return <Navigate to="/hub" replace />
 
   return children
 }
@@ -64,7 +64,7 @@ export function GuestRoute({ children }) {
 
   if (session && profile?.role === 'pending') return <Navigate to="/access-pending" replace />
   if (session && (profile?.role === 'manager' || profile?.role === 'technician')) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/hub" replace />
   }
 
   return children

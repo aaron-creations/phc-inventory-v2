@@ -14,16 +14,15 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
 
-  // Once session is detected, navigate home
   useEffect(() => {
-    if (session) navigate('/', { replace: true })
+    if (session) navigate('/hub', { replace: true })
   }, [session])
 
   async function handleGoogle() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${window.location.origin}/hub` },
     })
     if (error) setError(error.message)
   }
@@ -42,7 +41,7 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/` }
+      options: { emailRedirectTo: `${window.location.origin}/hub` }
     })
     setLoading(false)
     if (error) {
