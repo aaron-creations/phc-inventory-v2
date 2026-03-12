@@ -57,7 +57,7 @@ export default function JobsSection() {
     const [cRes, pRes, tRes] = await Promise.all([
       supabase.from('crm_customers').select('id, first_name, last_name, company_name').eq('status', 'active').order('last_name'),
       supabase.from('crm_properties').select('id, customer_id, address_line1, nickname'),
-      supabase.from('technicians').select('id, first_name, last_initial, is_active').eq('is_active', true)
+      supabase.from('technicians').select('id, first_name, last_initial')
     ])
     
     if (cRes.data) setCustomers(cRes.data)
@@ -303,7 +303,7 @@ export default function JobsSection() {
                 <button type="button" onClick={() => setIsCreating(false)} className="px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
                 <button type="submit" disabled={submitting || !selectedCustomerId || !newJob.property_id || !newJob.service_type} className="px-6 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-bold rounded-lg disabled:opacity-50">
                   {submitting ? 'Scheduling...' : 'Schedule Job'}
-                </button>
+                 </button>
               </div>
             </form>
           </div>

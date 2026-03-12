@@ -18,7 +18,7 @@ export default function RecurringSchedulesSection() {
   }, [])
 
   async function fetchTechnicians() {
-    const { data } = await supabase.from('technicians').select('id, first_name, last_initial, is_active').eq('is_active', true)
+    const { data } = await supabase.from('technicians').select('id, first_name, last_initial')
     if (data) setTechnicians(data)
   }
 
