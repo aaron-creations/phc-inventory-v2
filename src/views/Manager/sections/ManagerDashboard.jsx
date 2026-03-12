@@ -3,28 +3,42 @@ import { supabase } from '../../../lib/supabaseClient'
 import { format } from 'date-fns'
 import LowStockBanner from '../../../components/LowStockBanner'
 
+import { MapPin, User, Clock } from 'lucide-react'
+
 export default function ManagerDashboard() {
   const [stats, setStats] = useState({ products: 0, blends: 0, inventoryValue: 0, usageCost: 0 })
   const [activity, setActivity] = useState([])
   const [allProducts, setAllProducts] = useState([])
+  const [activeJobs, setActiveJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showUsageModal, setShowUsageModal] = useState(false)
   const [showRestockModal, setShowRestockModal] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [prodRes, blendRes, txRes] = await Promise.all([
+      const [prodRes, blendRes, txRes, jobsRes] = await Promise.all([
         supabase.from('products').select('id, name, containers_in_stock, cost_per_container, low_stock_threshold'),
         supabase.from('blends').select('id', { count: 'exact' }),
         supabase.from('transactions').select('*, products(name), blends(name), technicians(first_name, last_initial)').order('date', { ascending: false }).limit(20),
+        supabase.from('crm_jobs').select('*, crm_customers(first_name, last_name), crm_properties(nickname, address_line1), technicians(first_name, last_initial)').eq('status', 'in_progress')
       ])
+
       const products = prodRes.data || []
-      const inventoryValue = products.reduce((sum, p) => sum + (p.containers_in_stock * (p.cost_per_container || 0)), 0)
+      const inventoryValue = products.reduce((sum, p) =>
+        sum + (p.containers_in_stock * (p.cost_per_container || 0)), 0)
+
       const transactions = txRes.data || []
       const usageCost = transactions.reduce((sum, t) => sum + (t.estimated_cost || 0), 0)
-      setStats({ products: products.length, blends: blendRes.count || 0, inventoryValue, usageCost })
+
+      setStats({
+        products: products.length,
+        blends: blendRes.count || 0,
+        inventoryValue,
+        usageCost,
+      })
       setAllProducts(products)
       setActivity(transactions)
+      setActiveJobs(jobsRes.data || [])
       setLoading(false)
     }
     load()
@@ -42,20 +56,26 @@ export default function ManagerDashboard() {
   function txLabel(tx) {
     const name = tx.type === 'BLEND' ? tx.blends?.name : tx.products?.name
     const tech = tx.technicians ? `${tx.technicians.first_name} ${tx.technicians.last_initial}.` : ''
-    const amount = tx.type === 'RESTOCK' ? `+${tx.amount} containers` : `${tx.amount} ${tx.unit}`
+    const amount = tx.type === 'RESTOCK'
+      ? `+${tx.amount} containers`
+      : `${tx.amount} ${tx.unit}`
     return { name, tech, amount }
   }
 
   return (
     <div className="p-6 max-w-4xl">
       <h2 className="text-white font-bold text-xl mb-4">Dashboard</h2>
+
+      {/* Low-Stock Alert Banner */}
       {!loading && <LowStockBanner products={allProducts} linkTo="/stock" />}
+
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Products', value: stats.products,                       color: 'text-white' },
-          { label: 'Active Blends',  value: stats.blends,                          color: 'text-white' },
-          { label: 'Inventory Value',value: `$${stats.inventoryValue.toFixed(2)}`, color: 'text-brand-green' },
-          { label: 'Usage Cost',     value: `$${stats.usageCost.toFixed(2)}`,      color: 'text-brand-orange' },
+          { label: 'Total Products', value: stats.products,                           color: 'text-white' },
+          { label: 'Active Blends',  value: stats.blends,                              color: 'text-white' },
+          { label: 'Inventory Value',value: `$${stats.inventoryValue.toFixed(2)}`,     color: 'text-brand-green' },
+          { label: 'Usage Cost',     value: `$${stats.usageCost.toFixed(2)}`,          color: 'text-brand-orange' },
         ].map(kpi => (
           <div key={kpi.label} className="glass rounded-xl p-4">
             <p className="text-white/40 text-xs mb-1">{kpi.label}</p>
@@ -65,16 +85,68 @@ export default function ManagerDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Active Jobs Section */}
+      {(!loading && activeJobs.length > 0) && (
+        <div className="mb-8">
+          <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3 flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+            </span>
+            Active Jobs ({activeJobs.length})
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeJobs.map(job => (
+              <div key={job.id} className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="text-white font-bold">{job.service_type}</h4>
+                  <div className="bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">In Progress</div>
+                </div>
+                
+                <div className="space-y-1.5 mb-3">
+                  {job.crm_customers && (
+                    <div className="flex items-center gap-2 text-white/70 text-sm">
+                      <User size={14} className="text-white/30" />
+                      {job.crm_customers.first_name} {job.crm_customers.last_name}
+                    </div>
+                  )}
+                  {job.crm_properties && (
+                    <div className="flex items-center gap-2 text-white/70 text-sm">
+                      <MapPin size={14} className="text-white/30" />
+                      {job.crm_properties.nickname || job.crm_properties.address_line1}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2 pt-3 border-t border-orange-500/20 text-sm">
+                  <Clock size={14} className="text-orange-400" />
+                  <span className="text-white/50">Tech:</span>
+                  <span className="text-white font-medium">{job.technicians ? `${job.technicians.first_name} ${job.technicians.last_initial}.` : 'Unknown'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
       <div className="flex gap-3 mb-8">
-        <button onClick={() => setShowUsageModal(true)}
-          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all">
+        <button
+          onClick={() => setShowUsageModal(true)}
+          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all"
+        >
           📝 Log Usage
         </button>
-        <button onClick={() => setShowRestockModal(true)}
-          className="px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green text-sm transition-all">
+        <button
+          onClick={() => setShowRestockModal(true)}
+          className="px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green text-sm transition-all"
+        >
           + Log Restock
         </button>
       </div>
+
+      {/* Recent Activity */}
       <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3">Recent Activity</h3>
       <div className="glass rounded-xl overflow-hidden">
         {loading ? (
@@ -98,6 +170,7 @@ export default function ManagerDashboard() {
           )
         })}
       </div>
+
       {showUsageModal && <UsageModal onClose={() => setShowUsageModal(false)} />}
       {showRestockModal && <RestockModal onClose={() => setShowRestockModal(false)} />}
     </div>
@@ -131,6 +204,7 @@ function RestockModal({ onClose }) {
   async function save() {
     if (!form.productId || !form.containers) return
     setSaving(true)
+    const product = products.find(p => p.id === form.productId)
     await supabase.from('transactions').insert({
       type: 'RESTOCK', product_id: form.productId,
       amount: parseFloat(form.containers), unit: 'containers',
@@ -138,6 +212,7 @@ function RestockModal({ onClose }) {
     })
     await supabase.rpc('increment_stock', { product_id_param: form.productId, amount: parseFloat(form.containers) })
       .catch(() => {
+        // Fallback if RPC not set up yet
         supabase.from('products').select('containers_in_stock').eq('id', form.productId).single()
           .then(({ data }) => {
             supabase.from('products').update({ containers_in_stock: (data?.containers_in_stock || 0) + parseFloat(form.containers) }).eq('id', form.productId)
