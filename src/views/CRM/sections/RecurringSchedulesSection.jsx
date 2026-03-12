@@ -7,9 +7,7 @@ export default function RecurringSchedulesSection() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
 
-  useEffect(() => {
-    fetchSchedules()
-  }, [])
+  useEffect(() => { fetchSchedules() }, [])
 
   async function fetchSchedules() {
     setLoading(true)
@@ -22,7 +20,6 @@ export default function RecurringSchedulesSection() {
         technicians ( first_name, last_name )
       `)
       .order('created_at', { ascending: false })
-      
     if (!error) setSchedules(data || [])
     setLoading(false)
   }
@@ -30,9 +27,7 @@ export default function RecurringSchedulesSection() {
   async function toggleStatus(id, currentStatus) {
     const newStatus = currentStatus === 'active' ? 'paused' : 'active'
     const { error } = await supabase.from('crm_recurring_schedules').update({ status: newStatus }).eq('id', id)
-    if (!error) {
-      setSchedules(schedules.map(s => s.id === id ? { ...s, status: newStatus } : s))
-    }
+    if (!error) setSchedules(schedules.map(s => s.id === id ? { ...s, status: newStatus } : s))
   }
 
   async function deleteSchedule(id) {
@@ -61,29 +56,25 @@ export default function RecurringSchedulesSection() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
-      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-serif font-bold text-white mb-1">Recurring Schedules</h1>
           <p className="text-sm text-white/40">Manage automated repeating services.</p>
         </div>
-        
         <button
           onClick={manuallyRunGeneration}
           disabled={generating}
           className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
           title="Manually trigger the cron job to generate upcoming instances"
         >
-          <RefreshCw size={16} className={generating ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={generating ? 'animate-spin' : ''} />
           {generating ? 'Running...' : 'Run Generation Batch Now'}
         </button>
       </div>
 
       <div className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
         {schedules.length === 0 ? (
-          <div className="p-8 text-center text-white/40">
-            No recurring schedules found. You can set them up when scheduling a job.
-          </div>
+          <div className="p-8 text-center text-white/40">No recurring schedules found. You can set them up when scheduling a job.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -111,8 +102,7 @@ export default function RecurringSchedulesSection() {
                     </td>
                     <td className="p-4 align-top">
                       <div className="text-white/80 font-medium text-sm flex items-center gap-1.5 mb-1">
-                        <User size={12} className="text-white/30"/> 
-                        {schedule.crm_customers?.first_name} {schedule.crm_customers?.last_name}
+                        <User size={12} className="text-white/30"/> {schedule.crm_customers?.first_name} {schedule.crm_customers?.last_name}
                       </div>
                       <div className="text-white/50 text-xs flex items-center gap-1.5">
                         <MapPin size={12} className="text-white/30"/>
@@ -122,7 +112,7 @@ export default function RecurringSchedulesSection() {
                     <td className="p-4 align-top">
                       <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded text-xs text-white/70 capitalize">
                         <Clock size={12} className="text-blue-400" />
-                        {schedule.frequency} 
+                        {schedule.frequency}
                         {schedule.frequency === 'custom' && ` (${schedule.interval_days} days)`}
                       </div>
                     </td>
@@ -136,16 +126,16 @@ export default function RecurringSchedulesSection() {
                     </td>
                     <td className="p-4 align-top text-right">
                       <div className="flex justify-end items-center gap-2">
-                        <button 
-                          onClick={() => toggleStatus(schedule.id, schedule.status)} 
-                          className={`p-1.5 rounded-lg transition-colors ${schedule.status === 'active' ? 'text-orange-400 hover:bg-orange-400/10' : 'text-brand-green hover:bg-brand-green/10'}`} 
+                        <button
+                          onClick={() => toggleStatus(schedule.id, schedule.status)}
+                          className={`p-1.5 rounded-lg transition-colors ${schedule.status === 'active' ? 'text-orange-400 hover:bg-orange-400/10' : 'text-brand-green hover:bg-brand-green/10'}`}
                           title={schedule.status === 'active' ? 'Pause Schedule' : 'Resume Schedule'}
                         >
                           {schedule.status === 'active' ? <PauseCircle size={18} /> : <PlayCircle size={18} />}
                         </button>
-                        <button 
-                          onClick={() => deleteSchedule(schedule.id)} 
-                          className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" 
+                        <button
+                          onClick={() => deleteSchedule(schedule.id)}
+                          className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                           title="Delete Schedule"
                         >
                           <Trash2 size={18} />
@@ -159,7 +149,6 @@ export default function RecurringSchedulesSection() {
           </div>
         )}
       </div>
-
     </div>
   )
 }
