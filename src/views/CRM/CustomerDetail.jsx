@@ -26,7 +26,7 @@ export default function CustomerDetail() {
   const [technicians, setTechnicians] = useState([])
   const [isSchedulingJob, setIsSchedulingJob] = useState(false)
   const [schedulingProperty, setSchedulingProperty] = useState(null)
-  const [newJob, setNewJob] = useState({ service_type: 'Spring Fert', scheduled_date: '', technician_id: '', quoted_price: '' })
+  const [newJob, setNewJob] = useState({ service_type: 'Spring Fert', scheduled_date: '', technician_id: '', quoted_price: '', is_recurring: false, frequency: 'monthly', interval_days: '' })
   const [isScheduling, setIsScheduling] = useState(false)
 
   useEffect(() => {
@@ -168,8 +168,11 @@ export default function CustomerDetail() {
       return
     }
 
+    // Remove recurring-specific fields from the payload for a single job
+    const { is_recurring, frequency, interval_days, ...jobPayload } = newJob
+
     const { data, error } = await supabase.from('crm_jobs').insert([{
-      ...newJob,
+      ...jobPayload,
       property_id: schedulingProperty.id,
       customer_id: customer.id,
       status: 'scheduled',
