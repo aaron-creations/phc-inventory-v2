@@ -160,10 +160,10 @@ export default function Dashboard() {
                     </p>
                   </div>
                   {job.status === 'completed' && (
-                     <span className="px-2 py-1 rounded bg-brand-green/20 text-brand-green text-[10px] font-bold uppercase">Done</span>
+                    <span className="px-2 py-1 rounded bg-brand-green/20 text-brand-green text-[10px] font-bold uppercase">Done</span>
                   )}
                   {job.status === 'in_progress' && (
-                     <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
+                    <span className="px-2 py-1 rounded bg-brand-orange/20 text-brand-orange text-[10px] font-bold uppercase">Active</span>
                   )}
                 </div>
                 

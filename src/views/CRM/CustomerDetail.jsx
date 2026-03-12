@@ -19,7 +19,6 @@ export default function CustomerDetail() {
     city: '', state: '', zip: '', access_notes: ''
   })
 
-  // Customer Edit State
   const [isEditingCustomer, setIsEditingCustomer] = useState(false)
   const [editCustomerForm, setEditCustomerForm] = useState({})
   const [isUpdatingCustomer, setIsUpdatingCustomer] = useState(false)
@@ -279,7 +278,7 @@ export default function CustomerDetail() {
         <section className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg flex flex-col">
           <div className="p-4 border-b border-white/5 bg-black/10 flex justify-between items-center">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-               <MapPin size={16} className="text-blue-400" /> Properties ({properties.length})
+              <MapPin size={16} className="text-blue-400" /> Properties ({properties.length})
             </h2>
             {!isAddingProperty && (
               <button onClick={() => setIsAddingProperty(true)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors" title="Add Property">
@@ -381,7 +380,7 @@ export default function CustomerDetail() {
                       )}
                     </div>
                   </div>
-                 ))}
+                ))}
               </div>
             )}
           </div>
@@ -397,31 +396,31 @@ export default function CustomerDetail() {
             <form onSubmit={handleUpdateCustomer} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">First Name *</label>
-                   <input required value={editCustomerForm.first_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, first_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">First Name *</label>
+                  <input required value={editCustomerForm.first_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, first_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                 </div>
                 <div>
-                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Last Name</label>
-                   <input value={editCustomerForm.last_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, last_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Last Name</label>
+                  <input value={editCustomerForm.last_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, last_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                 </div>
               </div>
               <div>
-                 <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Company Name</label>
-                 <input value={editCustomerForm.company_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, company_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Company Name</label>
+                <input value={editCustomerForm.company_name || ''} onChange={e => setEditCustomerForm({...editCustomerForm, company_name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Mobile Phone</label>
-                   <input type="tel" value={editCustomerForm.phone_mobile || ''} onChange={e => setEditCustomerForm({...editCustomerForm, phone_mobile: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Mobile Phone</label>
+                  <input type="tel" value={editCustomerForm.phone_mobile || ''} onChange={e => setEditCustomerForm({...editCustomerForm, phone_mobile: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                 </div>
                 <div>
-                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Email</label>
-                   <input type="email" value={editCustomerForm.email || ''} onChange={e => setEditCustomerForm({...editCustomerForm, email: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Email</label>
+                  <input type="email" value={editCustomerForm.email || ''} onChange={e => setEditCustomerForm({...editCustomerForm, email: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                 </div>
               </div>
               <div>
-                 <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Notes</label>
-                 <textarea rows={3} value={editCustomerForm.notes || ''} onChange={e => setEditCustomerForm({...editCustomerForm, notes: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Notes</label>
+                <textarea rows={3} value={editCustomerForm.notes || ''} onChange={e => setEditCustomerForm({...editCustomerForm, notes: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
               </div>
               <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
                 <button type="button" onClick={() => setIsEditingCustomer(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
