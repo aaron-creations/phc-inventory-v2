@@ -1,400 +1,391 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { supabase } from '../../lib/supabaseClient'
+import { supabase } from '../../../lib/supabaseClient'
 import { format } from 'date-fns'
-import { useAuth } from '../../contexts/AuthContext'
 
 export default function LoggingFlow() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile } = useAuth()
-
-  // The technician record is embedded in the profile via the FK join
-  const linkedTech = profile?.technicians
-
+  
+  // Passed state from Dashboard or MyJobs
+  const preSelectedJobId = location.state?.selectedJobId || ''
   const initialDate = location.state?.selectedDate || format(new Date(), 'yyyy-MM-dd')
-  const initialJobId = location.state?.selectedJobId || ''
 
+  const [date, setDate] = useState(initialDate)
+  const [techId, setTechId] = useState('')
+  const [jobId, setJobId] = useState(preSelectedJobId)
+  
+  const [mode, setMode] = useState('single') // 'single' | 'blend'
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [selectedBlendId, setSelectedBlendId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [unit, setUnit] = useState('') // gal, oz, lb
+  
+  const [technicians, setTechnicians] = useState([])
   const [products, setProducts] = useState([])
   const [blends, setBlends] = useState([])
-  const [mode, setMode] = useState('single') // 'single' | 'blend'
-  const [logs, setLogs] = useState([{ productId: '', blendId: '', amount: '', date: initialDate }])
-  const [blendComponents, setBlendComponents] = useState({}) // blendId -> components[]
-  const [jobs, setJobs] = useState([])
-  const [selectedJobId, setSelectedJobId] = useState(initialJobId)
+  const [jobs, setJobs] = useState([]) // For the "Link to Job" dropdown
+
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    async function load() {
-      const [prodRes, blendRes, jobsRes] = await Promise.all([
-        supabase.from('products').select('*').order('name'),
-        supabase.from('blends').select('*, blend_components(*, products(*))').order('name'),
-        linkedTech?.id ? supabase.from('crm_jobs')
-          .select('id, service_type, scheduled_date, status, crm_customers(last_name), crm_properties(address_line1)')
-          .eq('technician_id', linkedTech.id)
-          .in('status', ['scheduled', 'in_progress'])
-          .order('scheduled_date', { ascending: true }) : Promise.resolve({ data: [] })
+    async function loadData() {
+      const [techs, prods, blds] = await Promise.all([
+        supabase.from('technicians').select('id, first_name, last_initial').order('first_name'),
+        supabase.from('products').select('id, name, container_unit, unit_type, containers_in_stock, cost_per_container, container_size').order('name'),
+        supabase.from('blends').select('id, name').order('name')
       ])
-      setProducts(prodRes.data || [])
-      const blendsData = blendRes.data || []
-      setBlends(blendsData)
-      const compMap = {}
-      blendsData.forEach(b => { compMap[b.id] = b.blend_components })
-      setBlendComponents(compMap)
-      setJobs(jobsRes.data || [])
+      
+      const techData = techs.data || []
+      setTechnicians(techData)
+      setProducts(prods.data || [])
+      setBlends(blds.data || [])
+      
+      // Auto-select technician if there's only one active in the system
+      if (techData.length === 1 && !techId) {
+        setTechId(techData[0].id)
+      }
     }
-    if (linkedTech?.id) {
-      load()
-    }
-  }, [linkedTech?.id])
+    loadData()
+  }, [])
 
-  function updateLog(i, field, value) {
-    setLogs(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l))
-  }
-
-  function addLog() {
-    setLogs(prev => [...prev, { productId: '', blendId: '', amount: '', date: format(new Date(), 'yyyy-MM-dd') }])
-  }
-
-  function removeLog(i) {
-    setLogs(prev => prev.filter((_, idx) => idx !== i))
-  }
-
-  function getProduct(id) { return products.find(p => p.id === id) }
-
-  async function handleSubmit() {
-    if (submitting || !linkedTech) return
-
-    // --- Validation Phase ---
-    for (const log of logs) {
-      const amount = parseFloat(log.amount)
-      if (isNaN(amount) || amount <= 0) {
-        alert("Please enter a valid amount greater than 0.")
+  // Load jobs when technician or date changes
+  useEffect(() => {
+    async function loadJobs() {
+      if (!techId) {
+        setJobs([])
         return
       }
+      
+      const { data } = await supabase
+        .from('crm_jobs')
+        .select(`
+          id,
+          service_type,
+          scheduled_date,
+          status,
+          crm_properties ( address_line1, nickname ),
+          crm_customers ( last_name )
+        `)
+        .eq('technician_id', techId)
+        .in('status', ['scheduled', 'in_progress'])
+        .order('scheduled_date')
+        
+      setJobs(data || [])
+      
+      // If preSelectedJobId exists but isn't in this list (maybe marked complete?), you might want to fetch it explicitly.
+      // But for simplicity, we assume it's in the list if passed from dash.
+    }
+    loadJobs()
+  }, [techId])
 
-      if (mode === 'single' && log.productId) {
-        const product = getProduct(log.productId)
-        if (product) {
-          const amountInContainers = product.unit_type === 'direct'
-            ? amount / (product.container_size * 473.176)
-            : amount / product.container_size
-            
-          if (amountInContainers > product.containers_in_stock + 0.0001) {
-            alert(`Cannot submit: The amount for ${product.name} exceeds available inventory.`)
-            return
-          }
-        }
-      } else if (mode === 'blend' && log.blendId) {
-        const components = blendComponents[log.blendId] || []
-        for (const comp of components) {
-          const product = comp.products
-          if (!product) continue
-          const flOzUsed = (amount / 100) * comp.rate_fl_oz_per_100_gal
-          const containersUsed = flOzUsed / (product.container_size * 128)
-          
-          if (containersUsed > product.containers_in_stock + 0.0001) {
-            alert(`Cannot submit blend: Not enough stock of ${product.name}.`)
-            return
-          }
-        }
+  // Reset dependent fields when mode changes
+  useEffect(() => {
+    setAmount('')
+    setUnit('')
+    setSelectedProductId('')
+    setSelectedBlendId('')
+    setErrorMsg('')
+  }, [mode])
+
+  // Auto-set unit when product is selected
+  useEffect(() => {
+    if (mode === 'single' && selectedProductId) {
+      const prod = products.find(p => p.id === selectedProductId)
+      if (prod) {
+        setUnit(prod.container_unit)
       }
+    } else if (mode === 'blend') {
+      setUnit('gal') // Blends are always applied in gallons of mix
+    }
+  }, [selectedProductId, mode, products])
+
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSubmitting(true)
+    setErrorMsg('')
+
+    if (!techId) {
+      setErrorMsg("Please select a technician.")
+      setSubmitting(false); return
     }
 
-    setSubmitting(true)
     try {
-      for (const log of logs) {
-        if (mode === 'single' && log.productId && log.amount) {
-          const product = getProduct(log.productId)
-          const cost = product?.cost_per_container
-            ? (parseFloat(log.amount) / (product.container_size * 128)) * product.cost_per_container
-            : null
+      const numericAmount = parseFloat(amount)
+      let costEstimate = 0
 
-          await supabase.from('transactions').insert({
-            type: 'USAGE',
-            technician_id: linkedTech.id,
-            product_id: log.productId,
-            amount: parseFloat(log.amount),
-            unit: product?.unit_type === 'direct' ? 'mL' : 'gal mix',
-            estimated_cost: cost ? parseFloat(cost.toFixed(2)) : null,
-            date: log.date,
-            crm_job_id: selectedJobId || null,
-          })
+      // -------- SINGLE PRODUCT LOGGING --------
+      if (mode === 'single') {
+        const prod = products.find(p => p.id === selectedProductId)
+        
+        // Calculate estimated cost
+        if (prod.cost_per_container && prod.container_size) {
+          // Rule: amount is usually entered in the container's native unit here.
+          // For direct application, if they enter 1, and unit is gal, and container_size is 1 gal.
+          // Let's do simple straight math: (Input Amount / Container Size) * Cost Per Container
+          costEstimate = (numericAmount / prod.container_size) * prod.cost_per_container
+        }
 
-          // Decrement stock
-          const currentProduct = products.find(p => p.id === log.productId)
-          if (currentProduct) {
-            const amountInContainers = currentProduct.unit_type === 'direct'
-              ? parseFloat(log.amount) / (currentProduct.container_size * 473.176)
-              : parseFloat(log.amount) / currentProduct.container_size
-            await supabase
-              .from('products')
-              .update({ containers_in_stock: Math.max(0, currentProduct.containers_in_stock - amountInContainers) })
-              .eq('id', log.productId)
-          }
+        // 1. Insert Transaction
+        const { error: txError } = await supabase.from('transactions').insert({
+          type: 'USAGE',
+          technician_id: techId,
+          product_id: selectedProductId,
+          job_id: jobId || null,
+          amount: numericAmount,
+          unit: unit,
+          estimated_cost: costEstimate > 0 ? parseFloat(costEstimate.toFixed(2)) : null,
+          date: date
+        })
+        if (txError) throw txError
 
-        } else if (mode === 'blend' && log.blendId && log.amount) {
-          const gallons = parseFloat(log.amount)
-          const components = blendComponents[log.blendId] || []
+        // 2. Decrement Stock
+        const containersUsed = numericAmount / prod.container_size
+        const newStock = Math.max(0, prod.containers_in_stock - containersUsed)
+        
+        const { error: stockError } = await supabase
+          .from('products')
+          .update({ containers_in_stock: Number(newStock.toFixed(2)) })
+          .eq('id', selectedProductId)
+          
+        if (stockError) throw stockError
 
-          // Insert BLEND transaction
-          await supabase.from('transactions').insert({
-            type: 'BLEND',
-            technician_id: linkedTech.id,
-            blend_id: log.blendId,
-            amount: gallons,
-            unit: 'gal mix',
-            date: log.date,
-            crm_job_id: selectedJobId || null,
-          })
+      // -------- BLEND LOGGING --------
+      } else {
+        const { data: components, error: compError } = await supabase
+          .from('blend_components')
+          .select(`
+            product_id,
+            fl_oz_per_100_gal,
+            products ( container_unit, container_size, containers_in_stock, cost_per_container )
+          `)
+          .eq('blend_id', selectedBlendId)
+          
+        if (compError) throw compError
 
-          // Decrement each component
-          for (const comp of components) {
-            const flOzUsed = (gallons / 100) * comp.rate_fl_oz_per_100_gal
-            const product = comp.products
-            if (!product) continue
-            const containerSizeFlOz = product.container_size * 128
-            const containersUsed = flOzUsed / containerSizeFlOz
-            await supabase
-              .from('products')
-              .update({ containers_in_stock: Math.max(0, product.containers_in_stock - containersUsed) })
-              .eq('id', product.id)
-          }
+        // Insert primary blend transaction
+        const { error: txError } = await supabase.from('transactions').insert({
+          type: 'BLEND',
+          technician_id: techId,
+          blend_id: selectedBlendId,
+          job_id: jobId || null,
+          amount: numericAmount,
+          unit: 'gal',
+          date: date
+        })
+        if (txError) throw txError
+
+        // Process each component in the blend
+        // E.g. Apply 50 gal. Formula = 50 fl oz / 100 gal. Thus, 25 fl oz used.
+        const multiplier = numericAmount / 100
+
+        for (let comp of components) {
+          const flOzUsed = comp.fl_oz_per_100_gal * multiplier
+          
+          let flOzContainerSize = comp.products.container_size
+          if (comp.products.container_unit === 'gal') flOzContainerSize *= 128
+          if (comp.products.container_unit === 'qt')  flOzContainerSize *= 32
+          if (comp.products.container_unit === 'pint') flOzContainerSize *= 16
+
+          const containersUsed = flOzUsed / flOzContainerSize
+          const updatedStock = Math.max(0, comp.products.containers_in_stock - containersUsed)
+
+          await supabase.from('products')
+            .update({ containers_in_stock: Number(updatedStock.toFixed(2)) })
+            .eq('id', comp.product_id)
         }
       }
+
       setSuccess(true)
-      setTimeout(() => navigate('/'), 1500)
+      setTimeout(() => {
+        setSuccess(false)
+        navigate('/') // Go back to dashboard on success
+      }, 1500)
+
     } catch (err) {
       console.error(err)
+      setErrorMsg(err.message || 'An error occurred while logging.')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const canSubmit = logs.every(l => {
-    const amt = parseFloat(l.amount)
-    return mode === 'single' ? (l.productId && amt > 0) : (l.blendId && amt > 0)
-  })
-
-  if (!linkedTech) {
-    return (
-      <div className="min-h-screen bg-forest-950 flex items-center justify-center px-4">
-        <div className="text-center glass rounded-2xl p-8 max-w-sm w-full">
-          <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-white font-semibold text-lg mb-2">No Technician Linked</p>
-          <p className="text-white/40 text-sm mb-6">
-            Your account isn't linked to a technician profile yet. Ask your manager to set this up in the Team section.
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            className="text-white/60 hover:text-white text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-forest-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-5xl mb-4">✅</div>
-          <p className="text-white font-semibold text-lg">Log submitted!</p>
-          <p className="text-white/40 text-sm mt-1">Returning to dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
+    <div className="min-h-screen bg-forest-950 p-4 pb-20">
       {/* Header */}
-      <div className="flex items-center mb-6">
-        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">← Back</button>
-        <h1 className="text-white font-bold text-lg flex-[2] justify-center truncate px-2">
-          {linkedTech.first_name} {linkedTech.last_initial}. — Log
-        </h1>
-        <div className="flex-1 flex justify-end gap-3">
-          <button onClick={() => navigate('/mix-rates')} className="text-white/50 hover:text-white transition-colors" title="Mix Rates">📋</button>
-          <button onClick={() => navigate('/hub')} className="text-white/50 hover:text-white transition-colors" title="Hub">🏠</button>
+      <div className="flex justify-between items-center mb-6 pt-2">
+        <button onClick={() => navigate(-1)} className="text-white/50 text-2xl px-2">×</button>
+        <h1 className="text-white font-bold text-lg">Log Material</h1>
+        <div className="w-8"></div>
+      </div>
+
+      {success ? (
+        <div className="flex flex-col items-center justify-center py-20 animate-in zoom-in duration-300">
+          <div className="w-24 h-24 bg-brand-green/20 text-brand-green rounded-full flex items-center justify-center text-5xl mb-4">
+            ✓
+          </div>
+          <h2 className="text-white font-bold text-xl">Logged Successfully</h2>
         </div>
-      </div>
-
-      {/* Link to Job (Optional) */}
-      <div className="mb-6 px-1">
-        <label className="text-white/40 text-xs mb-1.5 block font-bold uppercase tracking-wider">Link to Job (Optional)</label>
-        <select
-          value={selectedJobId}
-          onChange={e => setSelectedJobId(e.target.value)}
-          className="w-full bg-forest-800 border border-white/10 rounded-lg px-3 py-3 text-white text-sm outline-none focus:border-brand-green/50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M7%2010L12%2015L17%2010%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.5%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_10px_center] bg-[length:1.5em]"
-        >
-          <option value="">No Active Job</option>
-          {jobs.map(j => {
-            const dateStr = j.scheduled_date ? new Date(j.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Unscheduled'
-            const statusIndicator = j.status === 'in_progress' ? '🟢 ' : '🗓️ '
-            const label = `${statusIndicator}${j.service_type} - ${j.crm_customers?.last_name}`
-            return <option key={j.id} value={j.id}>{label} ({dateStr})</option>
-          })}
-        </select>
-      </div>
-
-      {/* Mode Toggle */}
-      <div className="flex glass rounded-xl p-1 mb-6">
-        {[['single', '🧪 Single Product'], ['blend', '🧬 Blend']].map(([m, label]) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-              mode === m ? 'bg-brand-green text-forest-950' : 'text-white/50 hover:text-white'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Log Entries */}
-      <div className="flex flex-col gap-4 mb-4">
-        {logs.map((log, i) => (
-          <LogEntry
-            key={i}
-            log={log}
-            index={i}
-            mode={mode}
-            products={products}
-            blends={blends}
-            blendComponents={blendComponents}
-            onUpdate={updateLog}
-            onRemove={logs.length > 1 ? () => removeLog(i) : null}
-          />
-        ))}
-      </div>
-
-      {/* Add Another */}
-      <button
-        onClick={addLog}
-        className="w-full py-3 rounded-xl border border-dashed border-white/20 text-white/40 hover:text-white/60 hover:border-white/40 text-sm transition-all mb-6"
-      >
-        + Add Another
-      </button>
-
-      {/* Submit */}
-      <button
-        onClick={handleSubmit}
-        disabled={!canSubmit || submitting}
-        className="w-full py-4 rounded-xl bg-brand-green text-forest-950 font-bold text-base transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-green/90"
-      >
-        {submitting ? 'Submitting...' : 'Submit Log'}
-      </button>
-    </div>
-  )
-}
-
-function LogEntry({ log, index, mode, products, blends, blendComponents, onUpdate, onRemove }) {
-  const selectedProduct = products.find(p => p.id === log.productId)
-  const selectedBlend = blends.find(b => b.id === log.blendId)
-  const components = blendComponents[log.blendId] || []
-
-  return (
-    <div className="glass rounded-xl p-4 relative">
-      {onRemove && (
-        <button onClick={onRemove} className="absolute top-3 right-3 text-white/20 hover:text-red-400 text-xs transition-colors">✕</button>
-      )}
-
-      {/* Date */}
-      <label className="text-white/40 text-xs mb-1 block">Date</label>
-      <input
-        type="date"
-        value={log.date}
-        onChange={e => onUpdate(index, 'date', e.target.value)}
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm mb-3 outline-none focus:border-brand-green/50"
-      />
-
-      {mode === 'single' ? (
-        <>
-          {/* Product Dropdown */}
-          <label className="text-white/40 text-xs mb-1 block">Product</label>
-          <select
-            value={log.productId}
-            onChange={e => onUpdate(index, 'productId', e.target.value)}
-            className="w-full bg-forest-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm mb-3 outline-none focus:border-brand-green/50"
-          >
-            <option value="">Select a product...</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
-          {/* Mix rate helper */}
-          {selectedProduct?.unit_type === 'mixed' && (
-            <p className="text-brand-green/70 text-xs mb-2 font-mono">Mix rate: {selectedProduct.mix_rate}</p>
-          )}
-
-          {/* Amount Input */}
-          {selectedProduct && (
-            <>
-              <label className="text-white/40 text-xs mb-1 block">
-                {selectedProduct.unit_type === 'direct' ? 'Amount (mL)' : 'Gallons of Mix Applied'}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={log.amount}
-                onChange={e => onUpdate(index, 'amount', e.target.value)}
-                placeholder={selectedProduct.unit_type === 'direct' ? 'e.g. 20' : 'e.g. 100'}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50"
-              />
-            </>
-          )}
-        </>
       ) : (
-        <>
-          {/* Blend Dropdown */}
-          <label className="text-white/40 text-xs mb-1 block">Blend</label>
-          <select
-            value={log.blendId}
-            onChange={e => onUpdate(index, 'blendId', e.target.value)}
-            className="w-full bg-forest-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm mb-3 outline-none focus:border-brand-green/50"
-          >
-            <option value="">Select a blend...</option>
-            {blends.map(b => (
-              <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>
-            ))}
-          </select>
+        <form onSubmit={handleSubmit} className="w-full max-w-md mx-auto space-y-6">
+          
+          {/* Mode Toggle */}
+          <div className="flex bg-black/20 p-1 rounded-xl border border-white/5">
+            <button
+              type="button"
+              onClick={() => setMode('single')}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${mode === 'single' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40'}`}
+            >
+              Single Product
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('blend')}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${mode === 'blend' ? 'bg-brand-blue/20 text-brand-blue shadow-sm' : 'text-white/40'}`}
+            >
+              Tank Blend
+            </button>
+          </div>
 
-          {/* Blend recipe summary */}
-          {selectedBlend && components.length > 0 && (
-            <div className="glass rounded-lg p-3 mb-3">
-              <p className="text-white/40 text-xs mb-2 font-semibold">Recipe (per 100 gal)</p>
-              {components.map(c => (
-                <div key={c.id} className="flex justify-between">
-                  <span className="text-white/60 text-xs">{c.products?.name}</span>
-                  <span className="text-white/40 text-xs font-mono">{c.rate_fl_oz_per_100_gal} fl oz</span>
-                </div>
-              ))}
+          <div className="glass p-5 rounded-2xl border border-white/5 space-y-5">
+            {/* Meta row: Date + Tech */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Date</label>
+                <input
+                  type="date"
+                  required
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-brand-green text-sm"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Technician</label>
+                <select
+                  required
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-brand-green text-sm appearance-none"
+                  value={techId}
+                  onChange={e => setTechId(e.target.value)}
+                >
+                  <option value="" disabled>Select...</option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id}>{t.first_name} {t.last_initial}.</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Optional Job Link */}
+            {techId && jobs.length > 0 && (
+              <div className="pt-2 animate-in slide-in-from-top-2">
+                <label className="flex items-center gap-2 text-brand-orange border-brand-orange/20 text-xs font-semibold uppercase tracking-wider mb-2">
+                  <span>📍</span> Link to Job? (Optional)
+                </label>
+                <select
+                  className="w-full bg-brand-orange/5 border border-brand-orange/20 rounded-xl px-4 py-3 text-brand-orange focus:outline-none focus:border-brand-orange text-sm appearance-none"
+                  value={jobId}
+                  onChange={e => setJobId(e.target.value)}
+                >
+                  <option value="">No specific job</option>
+                  {jobs.map(j => (
+                    <option key={j.id} value={j.id} className="text-black">
+                      {j.service_type} - {j.crm_customers?.last_name} ({j.crm_properties?.nickname || j.crm_properties?.address_line1})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="border-t border-white/5 my-4"></div>
+
+            {/* Selection */}
+            {mode === 'single' ? (
+               <div>
+                <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Product Applied</label>
+                <select
+                  required
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-brand-green text-base appearance-none"
+                  value={selectedProductId}
+                  onChange={e => setSelectedProductId(e.target.value)}
+                >
+                  <option value="" disabled>Select Product</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-brand-blue/70 text-xs font-semibold uppercase tracking-wider mb-2">Blend Applied</label>
+                <select
+                  required
+                  className="w-full bg-brand-blue/5 border border-brand-blue/20 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-brand-blue text-base appearance-none"
+                  value={selectedBlendId}
+                  onChange={e => setSelectedBlendId(e.target.value)}
+                >
+                  <option value="" disabled>Select Blend Recipe</option>
+                  {blends.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-white text-lg font-bold focus:outline-none focus:border-brand-green"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Unit</label>
+                <input
+                  type="text"
+                  readOnly
+                  className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-white/50 text-lg font-bold cursor-not-allowed"
+                  value={unit}
+                />
+              </div>
+            </div>
+            
+            {mode === 'blend' && amount && (
+              <p className="text-brand-blue xl text-[11px] leading-tight opacity-70">
+                Logging {amount} gallons of mix will automatically decrement stock for all associated component products based on their set rates per 100 gallons.
+              </p>
+            )}
+
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium text-center">
+              {errorMsg}
             </div>
           )}
 
-          {/* Gallons input */}
-          {selectedBlend && (
-            <>
-              <label className="text-white/40 text-xs mb-1 block">Gallons of Mix Applied</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={log.amount}
-                onChange={e => onUpdate(index, 'amount', e.target.value)}
-                placeholder="e.g. 100"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-green/50"
-              />
-            </>
-          )}
-        </>
+          <button
+            type="submit"
+            disabled={submitting}
+            className={`w-full py-4.5 rounded-xl font-bold text-lg uppercase tracking-wider transition-all
+              ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98] shadow-lg'}
+              ${mode === 'single' ? 'bg-brand-green text-forest-950 shadow-brand-green/20' : 'bg-brand-blue text-black shadow-brand-blue/20'}
+            `}
+          >
+            {submitting ? 'Logging...' : 'Submit Log'}
+          </button>
+        </form>
       )}
     </div>
   )

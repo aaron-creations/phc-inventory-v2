@@ -1,340 +1,308 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '../../../lib/supabaseClient'
-import { useAuth } from '../../../contexts/AuthContext'
-import { ArrowLeft, Plus, Save, X, Wrench, Settings, Edit2, Trash2 } from 'lucide-react'
+import { supabase } from '../../../../lib/supabaseClient'
+import { format, addDays } from 'date-fns'
 
-export default function AssetDetail() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const { profile } = useAuth()
-  
-  const techId = profile?.technicians?.id
-
-  const [asset, setAsset] = useState(null)
+export default function AssetDetail({ asset, onBack }) {
+  const [schedules, setSchedules] = useState([])
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
-  
-  // Log Add State
-  const [isLogging, setIsLogging] = useState(false)
-  const [editingLogId, setEditingLogId] = useState(null)
-  const [newLog, setNewLog] = useState({
-    service_type: '',
-    description: '',
-    service_date: new Date().toISOString().split('T')[0],
-    cost: '',
-    next_due_date: '',
-    next_due_miles_hours: ''
-  })
-  const [submitting, setSubmitting] = useState(false)
+  const [isAddingTask, setIsAddingTask] = useState(false)
+  const [activeTab, setActiveTab] = useState('tasks') // 'tasks' or 'logs'
+
+  // New task form state
+  const [serviceType, setServiceType] = useState('')
+  const [intervalDays, setIntervalDays] = useState('')
+  const [lastDoneDate, setLastDoneDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   useEffect(() => {
-    fetchAssetData()
-  }, [id])
+    loadAssetData()
+  }, [asset.id])
 
-  async function fetchAssetData() {
+  async function loadAssetData() {
     setLoading(true)
-    
-    const { data: aData, error: aErr } = await supabase
-      .from('fleet_assets')
-      .select('*')
-      .eq('id', id)
-      .single()
-      
-    if (aErr) {
-      console.error(aErr)
-      setLoading(false)
-      return
-    }
-    setAsset(aData)
-
-    const { data: lData } = await supabase
-      .from('fleet_maintenance_logs')
-      .select(`
-        *,
-        technicians (first_name, last_initial)
-      `)
-      .eq('asset_id', id)
-      .order('service_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      
-    if (lData) setLogs(lData)
-
+    const [scheduleRes, logsRes] = await Promise.all([
+      supabase.from('fleet_maintenance_schedules').select('*').eq('asset_id', asset.id).order('next_due_date'),
+      supabase.from('fleet_maintenance_logs').select(`
+        id,
+        service_type,
+        date_completed,
+        cost,
+        notes,
+        technicians ( first_name, last_initial )
+      `).eq('asset_id', asset.id).order('date_completed', { ascending: false })
+    ])
+    setSchedules(scheduleRes.data || [])
+    setLogs(logsRes.data || [])
     setLoading(false)
   }
 
-  async function handleAddLog(e) {
+  async function handleAddTask(e) {
     e.preventDefault()
-    setSubmitting(true)
+    setIsAddingTask(false)
+
+    const nextDue = addDays(new Date(lastDoneDate), parseInt(intervalDays))
     
-    // Convert empties to nulls
-    const payload = {
-      ...newLog,
-      asset_id: id,
-      technician_id: techId || null,
-      cost: newLog.cost ? parseFloat(newLog.cost) : null,
-      next_due_date: newLog.next_due_date || null,
-      next_due_miles_hours: newLog.next_due_miles_hours ? parseInt(newLog.next_due_miles_hours) : null
-    }
-
-    let errorObj = null;
-    let savedData = null;
-
-    if (editingLogId) {
-      const updatePayload = { ...payload }
-      delete updatePayload.technician_id // keep original creator
-
-      const { data, error } = await supabase
-        .from('fleet_maintenance_logs')
-        .update(updatePayload)
-        .eq('id', editingLogId)
-        .select(`
-          *,
-          technicians (first_name, last_initial)
-        `)
-        .single()
-      errorObj = error
-      savedData = data
-    } else {
-      const { data, error } = await supabase
-        .from('fleet_maintenance_logs')
-        .insert([payload])
-        .select(`
-          *,
-          technicians (first_name, last_initial)
-        `)
-        .single()
-      errorObj = error
-      savedData = data
-    }
-
-    setSubmitting(false)
-
-    if (errorObj) {
-      alert(`Error saving log: ${errorObj.message}`)
-    } else {
-      if (editingLogId) {
-        setLogs(logs.map(l => l.id === editingLogId ? savedData : l))
-      } else {
-        setLogs([savedData, ...logs])
-      }
-      cancelLogging()
-    }
-  }
-
-  function cancelLogging() {
-    setIsLogging(false)
-    setEditingLogId(null)
-    setNewLog({
-      service_type: '', description: '', service_date: new Date().toISOString().split('T')[0],
-      cost: '', next_due_date: '', next_due_miles_hours: ''
+    const { error } = await supabase.from('fleet_maintenance_schedules').insert({
+      asset_id: asset.id,
+      service_type: serviceType,
+      interval_days: parseInt(intervalDays),
+      last_done_date: lastDoneDate,
+      next_due_date: format(nextDue, 'yyyy-MM-dd'),
+      alert_sent: false
     })
-  }
 
-  function handleEdit(log) {
-    setEditingLogId(log.id)
-    setNewLog({
-      service_type: log.service_type || '',
-      description: log.description || '',
-      service_date: log.service_date ? log.service_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      cost: log.cost !== null ? log.cost : '',
-      next_due_date: log.next_due_date ? log.next_due_date.split('T')[0] : '',
-      next_due_miles_hours: log.next_due_miles_hours !== null ? log.next_due_miles_hours : ''
-    })
-    setIsLogging(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  async function handleDelete(id) {
-    if (!window.confirm("Are you sure you want to delete this maintenance log?")) return
-    
-    const { error } = await supabase
-      .from('fleet_maintenance_logs')
-      .delete()
-      .eq('id', id)
-      
-    if (error) {
-      alert(`Error deleting log: ${error.message}`)
-    } else {
-      setLogs(logs.filter(l => l.id !== id))
-    }
-  }
-
-  async function handleStatusToggle() {
-    const newStatus = asset.status === 'active' ? 'in_shop' : 'active'
-    const { error } = await supabase.from('fleet_assets').update({ status: newStatus }).eq('id', asset.id)
     if (!error) {
-      setAsset({ ...asset, status: newStatus })
+      loadAssetData()
+      setServiceType('')
+      setIntervalDays('')
     }
   }
 
-  if (loading) return (
-    <div className="p-8 flex items-center justify-center h-screen bg-forest-950">
-      <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-brand-orange animate-spin"></div>
-    </div>
-  )
+  async function markTaskComplete(schedule) {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const nextDue = format(addDays(new Date(), schedule.interval_days), 'yyyy-MM-dd')
 
-  if (!asset) return (
-    <div className="p-8 text-white/40 min-h-screen bg-forest-950">Asset not found.</div>
-  )
+    // 1. Update the schedule's next due date
+    await supabase.from('fleet_maintenance_schedules').update({
+      last_done_date: today,
+      next_due_date: nextDue,
+      alert_sent: false
+    }).eq('id', schedule.id)
+
+    // 2. Create a log entry
+    await supabase.from('fleet_maintenance_logs').insert({
+      asset_id: asset.id,
+      service_type: schedule.service_type,
+      date_completed: today,
+      notes: `Routine maintenance completed.`
+      // technician_id would come from auth context in a full implementation
+    })
+
+    loadAssetData()
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Delete this maintenance task?')) return
+    await supabase.from('fleet_maintenance_schedules').delete().eq('id', id)
+    loadAssetData()
+  }
 
   return (
-    <div className="min-h-screen bg-forest-950 pb-20">
-      <div className="flex bg-black/40 border-b border-white/5 sticky top-0 z-10 px-4 md:px-8 py-4 items-center gap-4">
-        <button onClick={() => navigate('/fleet')} className="text-white/50 hover:text-white transition-colors text-sm font-medium">
-          ← Back
-        </button>
-      </div>
-
-      <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8">
-        
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between md:items-start">
+    <div className="flex flex-col h-full bg-forest-950">
+      {/* Header */}
+      <div className="flex-shrink-0 p-4 border-b border-white/10 bg-forest-900/50 backdrop-blur-md sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-2 -ml-2 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+          >
+            ←
+          </button>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-brand-orange mb-2 block">{asset.type}</span>
-            <h1 className="text-3xl font-serif font-bold text-white mb-2 leading-none flex items-center gap-3">
-              {asset.name}
-            </h1>
-            
-            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/50 mt-3">
-              {asset.make_model && <span><span className="text-white/30 uppercase text-[10px] tracking-wider block mb-0.5">Make/Model</span>{asset.make_model}</span>}
-              {asset.license_plate && <span><span className="text-white/30 uppercase text-[10px] tracking-wider block mb-0.5">Plate</span><span className="font-mono bg-white/5 px-1.5 py-0.5 rounded text-white/70">{asset.license_plate}</span></span>}
-              {asset.vin_serial && <span><span className="text-white/30 uppercase text-[10px] tracking-wider block mb-0.5">VIN / Serial</span><span className="font-mono text-white/70">{asset.vin_serial}</span></span>}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleStatusToggle}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
-                asset.status === 'active' 
-                  ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20' 
-                  : 'bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green/20'
-              }`}
-            >
-              {asset.status === 'active' ? 'Mark Out of Service' : 'Mark Active'}
-            </button>
+            <h2 className="text-xl font-bold text-white leading-tight">{asset.name}</h2>
+            <p className="text-white/50 text-xs">
+              {asset.year} {asset.make} {asset.model} {asset.vin && `· ${asset.vin}`}
+            </p>
           </div>
         </div>
 
-        {/* LOGS PANEL */}
-        <section className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg flex flex-col">
-          <div className="p-4 md:p-6 border-b border-white/5 bg-black/10 flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <Wrench size={16} className="text-brand-orange" /> Maintenance History
-            </h2>
-            {!isLogging && (
-              <button 
-                onClick={() => setIsLogging(true)} 
-                className="flex items-center justify-center gap-2 bg-brand-orange/20 hover:bg-brand-orange/30 text-brand-orange border border-brand-orange/30 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-              >
-                <Plus size={16} /> Log Maintenance
-              </button>
+        {/* Tabs */}
+        <div className="flex gap-4 mt-6 border-b border-white/10">
+          <button
+            onClick={() => setActiveTab('tasks')}
+            className={`pb-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'tasks' ? 'text-brand-green' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            Maintenance Schedule
+            {activeTab === 'tasks' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-green rounded-t-full" />
             )}
-          </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`pb-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'logs' ? 'text-brand-green' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            Service History
+            {activeTab === 'logs' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-green rounded-t-full" />
+            )}
+          </button>
+        </div>
+      </div>
 
-          <div className="p-4 md:p-6 flex-1">
-            {isLogging && (
-              <div className="mb-8 p-5 bg-black/20 rounded-xl border border-white/10 animate-in fade-in duration-200">
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">{editingLogId ? 'Edit Service Log' : 'New Service Log'}</h3>
-                  <button type="button" onClick={cancelLogging} className="text-white/40 hover:text-white"><X size={16} /></button>
-                </div>
-                
-                <form onSubmit={handleAddLog} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Service Type *</label>
-                      <input required placeholder="e.g. Oil Change, Filter..." value={newLog.service_type} onChange={e => setNewLog({...newLog, service_type: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-brand-orange/50 outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Date Completed *</label>
-                      <input required type="date" value={newLog.service_date} onChange={e => setNewLog({...newLog, service_date: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-brand-orange/50 outline-none" />
-                    </div>
-                  </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        {activeTab === 'tasks' ? (
+          <>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold">Upcoming Tasks</h3>
+              <button
+                onClick={() => setIsAddingTask(true)}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                + Add Task
+              </button>
+            </div>
 
+            {isAddingTask && (
+              <form onSubmit={handleAddTask} className="glass rounded-xl p-4 mb-4 border border-brand-green/30 animate-in fade-in slide-in-from-top-2">
+                <h4 className="text-white font-bold text-sm mb-3">New Maintenance Task</h4>
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Description / Notes</label>
-                    <textarea placeholder="Replaced air filter, checked tire pressure..." value={newLog.description} onChange={e => setNewLog({...newLog, description: e.target.value})} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-brand-orange/50 outline-none" />
+                    <label className="block text-white/50 text-xs mb-1">Service Type</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full bg-forest-950/50 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-green text-sm"
+                      placeholder="e.g. Oil Change, Blade Sharpening"
+                      value={serviceType}
+                      onChange={e => setServiceType(e.target.value)}
+                    />
                   </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-white/5 pt-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Cost ($)</label>
-                      <input type="number" step="0.01" min="0" placeholder="0.00" value={newLog.cost} onChange={e => setNewLog({...newLog, cost: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-brand-orange/50 outline-none" />
+                      <label className="block text-white/50 text-xs mb-1">Interval (Days)</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        className="w-full bg-forest-950/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-white/20 focus:outline-none focus:border-brand-green text-sm"
+                        placeholder="e.g. 90"
+                        value={intervalDays}
+                        onChange={e => setIntervalDays(e.target.value)}
+                      />
                     </div>
                     <div>
-                      <label className="block text-brand-orange/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Next Due (Date)</label>
-                      <input type="date" value={newLog.next_due_date} onChange={e => setNewLog({...newLog, next_due_date: e.target.value})} className="w-full bg-brand-orange/5 border border-brand-orange/10 rounded-lg px-3 py-2 text-sm text-white focus:border-brand-orange/50 outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-brand-orange/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Next Due (Miles/Hrs)</label>
-                      <input type="number" placeholder="105000" value={newLog.next_due_miles_hours} onChange={e => setNewLog({...newLog, next_due_miles_hours: e.target.value})} className="w-full bg-brand-orange/5 border border-brand-orange/10 rounded-lg px-3 py-2 text-sm text-white focus:border-brand-orange/50 outline-none" />
+                      <label className="block text-white/50 text-xs mb-1">Last Done</label>
+                      <input
+                        type="date"
+                        required
+                        className="w-full bg-forest-950/50 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-green text-sm"
+                        value={lastDoneDate}
+                        onChange={e => setLastDoneDate(e.target.value)}
+                      />
                     </div>
                   </div>
-                  
-                  <div className="flex justify-end pt-2">
-                    <button type="submit" disabled={!newLog.service_type || submitting} className="flex items-center gap-1.5 px-6 py-2.5 bg-brand-orange hover:bg-brand-orange/90 text-forest-950 font-bold rounded-lg transition-colors disabled:opacity-50">
-                      <Save size={16} /> {submitting ? 'Saving...' : 'Save Log'}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingTask(false)}
+                      className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg text-sm font-medium hover:bg-white/20"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2 bg-brand-green text-forest-950 rounded-lg text-sm font-bold hover:bg-brand-green/90"
+                    >
+                      Save Task
                     </button>
                   </div>
-                </form>
-              </div>
+                </div>
+              </form>
             )}
 
-            {logs.length === 0 && !isLogging ? (
-              <p className="text-sm text-white/30 italic text-center py-10">No maintenance history recorded.</p>
-            ) : (
-              <div className="space-y-4">
-                {logs.map(log => (
-                  <div key={log.id} className="p-4 bg-white/[0.02] rounded-xl border border-white/5 hover:border-white/10 transition-colors group">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-white font-bold leading-tight">{log.service_type}</h3>
-                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 transition-opacity">
-                          <button onClick={() => handleEdit(log)} className="text-white/30 hover:text-white transition-colors" title="Edit">
-                            <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => handleDelete(log.id)} className="text-white/30 hover:text-red-400 transition-colors" title="Delete">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <span className="text-xs text-brand-green font-mono">
-                        {log.cost ? `$${log.cost.toFixed(2)}` : ''}
-                      </span>
-                    </div>
-                    
-                    {log.description && (
-                      <p className="text-white/60 text-sm mb-3 whitespace-pre-wrap">{log.description}</p>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 pt-3 border-t border-white/5 text-[11px] uppercase tracking-wider font-semibold">
-                      <div className="text-white/30">
-                        Date: <span className="text-white/70">{new Date(log.service_date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="text-white/30">
-                        Tech: <span className="text-white/70">{log.technicians ? `${log.technicians.first_name}` : 'Unknown'}</span>
-                      </div>
-                      
-                      {(log.next_due_date || log.next_due_miles_hours) && (
-                        <div className="text-brand-orange/60 ml-auto">
-                          Next Due:{' '}
-                          <span className="text-brand-orange">
-                            {log.next_due_date && new Date(log.next_due_date).toLocaleDateString()}
-                            {log.next_due_date && log.next_due_miles_hours && ' or '}
-                            {log.next_due_miles_hours && `${log.next_due_miles_hours.toLocaleString()} m/h`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+            {loading ? (
+              <div className="animate-pulse space-y-3">
+                {[1, 2].map(i => (
+                  <div key={i} className="h-24 bg-white/5 rounded-xl" />
                 ))}
               </div>
+            ) : schedules.length === 0 && !isAddingTask ? (
+              <div className="text-center py-10 text-white/50 text-sm">
+                No maintenance tasks scheduled.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {schedules.map(task => {
+                  const isOverdue = new Date(task.next_due_date) < new Date()
+                  const isDueSoon = new Date(task.next_due_date) < addDays(new Date(), 7)
+
+                  return (
+                    <div key={task.id} className="glass rounded-xl p-4 flex flex-col gap-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <h4 className="text-white font-bold leading-tight">{task.service_type}</h4>
+                          <p className="text-white/50 text-xs">Every {task.interval_days} days</p>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <button
+                            onClick={() => deleteSchedule(task.id)}
+                            className="text-white/30 hover:text-red-400 text-xs p-1"
+                            title="Delete Task"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-black/20 rounded-lg p-2.5">
+                        <div>
+                          <p className="text-[10px] text-white/50 uppercase tracking-widest font-bold mb-0.5">Next Due</p>
+                          <p className={`text-sm font-bold ${
+                            isOverdue ? 'text-red-400' : isDueSoon ? 'text-brand-orange' : 'text-white'
+                          }`}>
+                            {format(new Date(task.next_due_date), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => markTaskComplete(task)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                            isOverdue
+                              ? 'bg-red-400 hover:bg-red-300 text-black'
+                              : isDueSoon
+                                ? 'bg-brand-orange hover:bg-brand-orange/90 text-black'
+                                : 'bg-white/10 hover:bg-white/20 text-white'
+                          }`}
+                        >
+                          Mark Done
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          // Logs Tab
+          <div className="space-y-3">
+            {loading ? (
+              <div className="animate-pulse space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-16 bg-white/5 rounded-xl" />
+                ))}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="text-center py-10 text-white/50 text-sm">
+                No service history recorded.
+              </div>
+            ) : (
+              logs.map(log => (
+                <div key={log.id} className="glass rounded-xl p-3 border border-white/5 flex flex-col gap-1">
+                  <div className="flex justify-between items-start">
+                    <span className="text-white font-medium text-sm">{log.service_type}</span>
+                    <span className="text-white/40 text-xs">
+                      {format(new Date(log.date_completed), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  {log.notes && (
+                    <p className="text-white/60 text-xs italic">
+                      "{log.notes}"
+                    </p>
+                  )}
+                  {log.cost !== null && (
+                    <p className="text-brand-green/80 text-xs font-medium mt-1">
+                      ${log.cost.toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              ))
             )}
           </div>
-        </section>
-
+        )}
       </div>
     </div>
   )
