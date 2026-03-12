@@ -40,7 +40,7 @@ export default function JobsSection() {
         *,
         crm_customers ( first_name, last_name, company_name ),
         crm_properties ( address_line1, nickname ),
-        technicians ( first_name, last_name )
+        technicians ( first_name, last_initial )
       `)
       .order('scheduled_date', { ascending: true })
       
@@ -52,7 +52,7 @@ export default function JobsSection() {
     const [cRes, pRes, tRes] = await Promise.all([
       supabase.from('crm_customers').select('id, first_name, last_name, company_name').eq('status', 'active').order('last_name'),
       supabase.from('crm_properties').select('id, customer_id, address_line1, nickname'),
-      supabase.from('technicians').select('id, first_name, last_name, is_active').eq('is_active', true)
+      supabase.from('technicians').select('id, first_name, last_initial, is_active').eq('is_active', true)
     ])
     
     if (cRes.data) setCustomers(cRes.data)
@@ -117,7 +117,7 @@ export default function JobsSection() {
         *,
         crm_customers ( first_name, last_name, company_name ),
         crm_properties ( address_line1, nickname ),
-        technicians ( first_name, last_name )
+        technicians ( first_name, last_initial )
       `)
       .single()
       
@@ -215,7 +215,7 @@ export default function JobsSection() {
                 <select value={newJob.technician_id} onChange={e => setNewJob({...newJob, technician_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
                   <option value="" className="bg-forest-900">Unassigned</option>
                   {technicians.map(t => (
-                    <option key={t.id} value={t.id} className="bg-forest-900">{t.first_name} {t.last_name}</option>
+                    <option key={t.id} value={t.id} className="bg-forest-900">{t.first_name} {t.last_initial}.</option>
                   ))}
                 </select>
               </div>
@@ -351,7 +351,7 @@ function JobCard({ job, onStatusChange }) {
       <div className="flex justify-between items-end pt-3 border-t border-white/5 mt-auto">
         <div>
           <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-0.5">Assigned To</p>
-          <p className="text-sm text-white/80">{job.technicians ? `${job.technicians.first_name}` : 'Unassigned'}</p>
+          <p className="text-sm text-white/80">{job.technicians ? `${job.technicians.first_name} ${job.technicians.last_initial}.` : 'Unassigned'}</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-0.5">Date</p>

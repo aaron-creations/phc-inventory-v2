@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
-import { Clock, RefreshCw, MapPin, User, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
+import { Clock, RefreshCw, MapPin, User, PauseCircle, PlayCircle, Trash2, Edit, X } from 'lucide-react'
 
 export default function RecurringSchedulesSection() {
   const [schedules, setSchedules] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [technicians, setTechnicians] = useState([])
+
   useEffect(() => {
     fetchSchedules()
+    fetchTechnicians()
   }, [])
+
+  async function fetchTechnicians() {
+    const { data } = await supabase.from('technicians').select('id, first_name, last_initial, is_active').eq('is_active', true)
+    if (data) setTechnicians(data)
+  }
 
   async function fetchSchedules() {
     setLoading(true)
@@ -56,6 +67,41 @@ export default function RecurringSchedulesSection() {
     } else {
       alert('Successfully scanned and generated upcoming recurring jobs.')
       fetchSchedules() // To update last_generated_date
+    }
+  }
+
+  function openEdit(schedule) {
+    setEditForm({
+      id: schedule.id,
+      service_type: schedule.service_type,
+      quoted_price: schedule.quoted_price || '',
+      technician_id: schedule.technician_id || '',
+      frequency: schedule.frequency,
+      interval_days: schedule.interval_days || '',
+      customer_name: `${schedule.crm_customers?.first_name} ${schedule.crm_customers?.last_name}`,
+      property_name: schedule.crm_properties?.address_line1
+    })
+    setIsEditing(true)
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault()
+    setSavingEdit(true)
+    
+    const { error } = await supabase.from('crm_recurring_schedules').update({
+      service_type: editForm.service_type,
+      quoted_price: editForm.quoted_price ? parseFloat(editForm.quoted_price) : null,
+      technician_id: editForm.technician_id || null,
+      frequency: editForm.frequency,
+      interval_days: editForm.frequency === 'custom' ? parseInt(editForm.interval_days) : null
+    }).eq('id', editForm.id)
+    
+    setSavingEdit(false)
+    if (error) {
+      alert(`Error updating schedule: ${error.message}`)
+    } else {
+      setIsEditing(false)
+      fetchSchedules()
     }
   }
 
@@ -148,6 +194,13 @@ export default function RecurringSchedulesSection() {
                           {schedule.status === 'active' ? <PauseCircle size={18} /> : <PlayCircle size={18} />}
                         </button>
                         <button 
+                          onClick={() => openEdit(schedule)} 
+                          className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" 
+                          title="Edit Schedule"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button 
                           onClick={() => deleteSchedule(schedule.id)} 
                           className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" 
                           title="Delete Schedule"
@@ -163,6 +216,72 @@ export default function RecurringSchedulesSection() {
           </div>
         )}
       </div>
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-forest-900 border border-white/10 p-6 rounded-xl w-full max-w-lg shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-serif font-bold text-white mb-1">Edit Recurring Schedule</h2>
+                <div className="text-xs text-white/50">{editForm.customer_name} • {editForm.property_name}</div>
+              </div>
+              <button title="Close" onClick={() => setIsEditing(false)} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Service Type *</label>
+                <input required value={editForm.service_type || ''} onChange={e => setEditForm({...editForm, service_type: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Quoted Price ($)</label>
+                  <input type="number" step="0.01" min="0" value={editForm.quoted_price} onChange={e => setEditForm({...editForm, quoted_price: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                </div>
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Assign To Technician</label>
+                  <select value={editForm.technician_id} onChange={e => setEditForm({...editForm, technician_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                    <option value="" className="bg-forest-900">Unassigned</option>
+                    {technicians.map(t => (
+                      <option key={t.id} value={t.id} className="bg-forest-900">{t.first_name} {t.last_initial}.</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 bg-black/20 p-4 rounded-xl border border-white/10 mt-2">
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Frequency</label>
+                  <select value={editForm.frequency} onChange={e => setEditForm({...editForm, frequency: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                    <option value="weekly" className="bg-forest-900">Weekly</option>
+                    <option value="biweekly" className="bg-forest-900">Bi-Weekly</option>
+                    <option value="monthly" className="bg-forest-900">Monthly</option>
+                    <option value="quarterly" className="bg-forest-900">Quarterly</option>
+                    <option value="yearly" className="bg-forest-900">Yearly</option>
+                    <option value="custom" className="bg-forest-900">Custom Days</option>
+                  </select>
+                </div>
+                {editForm.frequency === 'custom' && (
+                  <div>
+                    <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Every X Days</label>
+                    <input type="number" min="1" required={editForm.frequency === 'custom'} value={editForm.interval_days} onChange={e => setEditForm({...editForm, interval_days: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={savingEdit || !editForm.service_type} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   )
