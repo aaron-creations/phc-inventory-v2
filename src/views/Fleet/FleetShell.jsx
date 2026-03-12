@@ -1,145 +1,94 @@
-import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabaseClient'
-import { Truck, Search, Plus, Wrench, ChevronRight } from 'lucide-react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
+import EquipmentSection from './sections/EquipmentSection'
+import FleetDashboardSection from './sections/FleetDashboardSection'
+import RecurringMaintenanceSection from './sections/RecurringMaintenanceSection'
+import MaintenanceHistorySection from './sections/MaintenanceHistorySection'
 import AssetDetail from './sections/AssetDetail'
 
+const NAV_ITEMS = [
+  { path: 'dashboard', label: 'Dashboard', icon: '📊' },
+  { path: 'equipment', label: 'Equipment', icon: '🚚' },
+  { path: 'recurring', label: 'Recurring', icon: '📅' },
+  { path: 'history',   label: 'History',   icon: '📋' },
+]
+
 export default function FleetShell() {
-  return (
-    <Routes>
-      <Route index element={<FleetDashboard />} />
-      <Route path=":id" element={<AssetDetail />} />
-    </Routes>
-  )
-}
-
-function FleetDashboard() {
-  const [assets, setAssets] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+  const location = useLocation()
+  const { user, signOut } = useAuth()
 
-  useEffect(() => {
-    fetchAssets()
-  }, [])
-
-  async function fetchAssets() {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('fleet_assets')
-      .select('*')
-      .order('type', { ascending: true })
-      .order('name', { ascending: true })
-      
-    if (!error) setAssets(data || [])
-    setLoading(false)
-  }
-
-  const filtered = assets.filter(a => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      a.name.toLowerCase().includes(q) ||
-      a.make_model?.toLowerCase().includes(q) ||
-      a.license_plate?.toLowerCase().includes(q)
-    )
-  })
-
-  if (loading) return (
-    <div className="p-8 flex items-center justify-center h-screen bg-forest-950">
-      <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-brand-green animate-spin"></div>
-    </div>
-  )
-
-  const activeAssets = filtered.filter(a => a.status === 'active')
-  const inShopAssets = filtered.filter(a => a.status === 'in_shop')
+  // Find the active tab based on the URL path
+  const currentPath = location.pathname.split('/fleet/')[1]?.split('/')[0] || 'equipment'
 
   return (
-    <div className="min-h-screen bg-forest-950">
-      <div className="flex bg-black/40 border-b border-white/5 sticky top-0 z-10 px-4 md:px-8 py-4 items-center gap-4">
-        <button onClick={() => navigate('/hub')} className="text-white/50 hover:text-white transition-colors text-sm font-medium">
-          ← Hub
-        </button>
-        <h1 className="text-lg font-bold text-white flex items-center gap-2">
-          <Truck size={18} className="text-brand-orange" /> Fleet & Equipment
-        </h1>
-      </div>
-
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+    <div className="h-screen overflow-hidden bg-forest-950 flex flex-col md:flex-row w-full">
+      {/* Sidebar / Top Nav */}
+      <aside className="w-full md:w-52 flex-shrink-0 bg-forest-900 border-b md:border-b-0 md:border-r border-white/5 flex flex-col z-20 shadow-md md:shadow-none">
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search trucks, sprayers, plates..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-forest-900 border border-white/10 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-brand-orange/50 outline-none transition-colors"
-            />
+        {/* Brand */}
+        <div className="p-3 md:p-4 border-b border-white/5 flex justify-between items-center md:items-start md:flex-col gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <img src="/phc-logo.png" alt="PHC" className="w-7 h-7" />
+            <div>
+              <p className="text-brand-orange text-xs font-semibold tracking-widest uppercase leading-none">Fleet</p>
+              <p className="text-white/25 text-[10px] md:text-xs mt-0.5 truncate max-w-[120px]">{user?.email}</p>
+            </div>
+          </div>
+          
+          {/* Mobile-only quick actions header right */}
+          <div className="flex md:hidden items-center gap-2">
+            <button onClick={() => navigate('/hub')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-white/50 text-xs hover:bg-white/10" title="Hub">↩</button>
+            <button onClick={signOut} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20" title="Sign Out">🚪</button>
           </div>
         </div>
 
-        {inShopAssets.length > 0 && (
-          <section>
-            <h2 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Wrench size={14} /> In the Shop / Out of Service
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {inShopAssets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
-            </div>
-          </section>
-        )}
+        {/* Nav */}
+        <nav className="flex-none md:flex-1 p-2 flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto no-scrollbar gap-1 md:gap-0">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.path}
+              onClick={() => navigate(`/fleet/${item.path}`)}
+              className={`flex-shrink-0 md:w-full flex items-center justify-center md:justify-start gap-1.5 md:gap-2.5 px-3 md:px-3 py-2 md:py-2.5 rounded-lg text-xs md:text-sm mb-0 md:mb-0.5 transition-all text-center md:text-left ${
+                currentPath === item.path
+                  ? 'bg-brand-orange/15 text-brand-orange font-medium'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span className="text-sm md:text-base w-4 md:w-5 text-center">{item.icon}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
-        <section>
-          <h2 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-3">
-            Active Fleet ({activeAssets.length})
-          </h2>
-          {activeAssets.length === 0 ? (
-           <div className="p-8 bg-forest-900 border border-white/5 rounded-xl text-center text-white/40 text-sm">No active assets found.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {activeAssets.map(asset => <AssetCard key={asset.id} asset={asset} />)}
-            </div>
-          )}
-        </section>
-
-      </div>
-    </div>
-  )
-}
-
-function AssetCard({ asset }) {
-  const isInShop = asset.status === 'in_shop'
-
-  return (
-    <Link to={`/fleet/${asset.id}`} className={`block p-5 rounded-xl border transition-all duration-200 group ${
-      isInShop 
-        ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10 hover:border-red-500/30' 
-        : 'bg-forest-900 border-white/5 hover:bg-white/5 hover:border-white/10'
-    }`}>
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-1 block">
-            {asset.type}
-          </span>
-          <h3 className="text-white font-bold leading-tight group-hover:text-brand-orange transition-colors">
-            {asset.name}
-          </h3>
+        {/* Desktop Footer actions (Hidden on mobile) */}
+        <div className="hidden md:block p-2 border-t border-white/5 mt-auto">
+          <button
+            onClick={() => navigate('/hub')}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-white/40 hover:text-white hover:bg-white/5 transition-all mb-0.5"
+          >
+            <span className="w-5 text-center">↩</span> Back to Hub
+          </button>
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-red-400/60 hover:text-red-400 hover:bg-red-400/5 transition-all"
+          >
+            <span className="w-5 text-center">🚪</span> Sign Out
+          </button>
         </div>
-        <ChevronRight size={18} className="text-white/20 group-hover:text-brand-orange transition-colors" />
-      </div>
-      
-      <div className="space-y-1 content-start mt-3">
-        {asset.make_model && (
-          <p className="text-xs text-white/50">{asset.make_model}</p>
-        )}
-        {asset.license_plate && (
-          <p className="text-xs text-white/50 font-mono bg-black/20 px-2 py-0.5 rounded inline-block">
-            {asset.license_plate}
-          </p>
-        )}
-      </div>
-    </Link>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto bg-forest-950">
+        <Routes>
+          <Route path="/" element={<EquipmentSection />} />
+          <Route path="dashboard" element={<FleetDashboardSection />} />
+          <Route path="equipment" element={<EquipmentSection />} />
+          <Route path="asset/:id" element={<AssetDetail />} />
+          <Route path="recurring" element={<RecurringMaintenanceSection />} />
+          <Route path="history" element={<MaintenanceHistorySection />} />
+        </Routes>
+      </main>
+    </div>
   )
 }
