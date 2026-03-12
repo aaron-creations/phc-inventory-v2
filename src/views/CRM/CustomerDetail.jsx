@@ -23,6 +23,10 @@ export default function CustomerDetail() {
   const [editCustomerForm, setEditCustomerForm] = useState({})
   const [isUpdatingCustomer, setIsUpdatingCustomer] = useState(false)
   
+  const [isEditingProperty, setIsEditingProperty] = useState(false)
+  const [editPropertyForm, setEditPropertyForm] = useState({})
+  const [isUpdatingProperty, setIsUpdatingProperty] = useState(false)
+  
   const [technicians, setTechnicians] = useState([])
   const [isSchedulingJob, setIsSchedulingJob] = useState(false)
   const [schedulingProperty, setSchedulingProperty] = useState(null)
@@ -194,6 +198,41 @@ export default function CustomerDetail() {
     }
   }
 
+  function openEditProperty(p) {
+    setEditPropertyForm(p)
+    setIsEditingProperty(true)
+  }
+
+  async function handleUpdateProperty(e) {
+    e.preventDefault()
+    setIsUpdatingProperty(true)
+    const { data, error } = await supabase.from('crm_properties').update({
+      nickname: editPropertyForm.nickname,
+      address_line1: editPropertyForm.address_line1,
+      address_line2: editPropertyForm.address_line2,
+      city: editPropertyForm.city,
+      state: editPropertyForm.state,
+      zip: editPropertyForm.zip,
+      access_notes: editPropertyForm.access_notes
+    }).eq('id', editPropertyForm.id).select().single()
+
+    setIsUpdatingProperty(false)
+    if (error) {
+      alert(`Error updating property: ${error.message}`)
+    } else {
+      setProperties(properties.map(p => p.id === data.id ? data : p))
+      setIsEditingProperty(false)
+    }
+  }
+
+  async function handleDeleteProperty(id) {
+    if (confirm('Are you sure you want to delete this property? This might affect existing jobs.')) {
+      const { error } = await supabase.from('crm_properties').delete().eq('id', id)
+      if (error) alert(`Error deleting property: ${error.message}`)
+      else setProperties(properties.filter(p => p.id !== id))
+    }
+  }
+
   async function handleAddProperty(e) {
     e.preventDefault()
     
@@ -330,9 +369,17 @@ export default function CustomerDetail() {
                         {p.address_line2 && <div className="text-white/60 text-xs mt-0.5">{p.address_line2}</div>}
                         {p.city && <div className="text-white/40 text-xs mt-0.5">{p.city}</div>}
                       </div>
-                      <button onClick={() => openScheduleJob(p)} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 w-8 h-8 rounded flex items-center justify-center transition-colors shadow-sm flex-shrink-0 border border-blue-500/30" title="Schedule Service">
-                        <Plus size={16} />
-                      </button>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => openEditProperty(p)} className="bg-white/5 text-white/50 hover:bg-white/10 hover:text-white w-8 h-8 rounded flex items-center justify-center transition-colors shadow-sm flex-shrink-0" title="Edit Property">
+                          <Edit size={14} />
+                        </button>
+                        <button onClick={() => handleDeleteProperty(p.id)} className="bg-red-500/10 text-red-500/60 hover:bg-red-500/20 w-8 h-8 rounded flex items-center justify-center transition-colors shadow-sm flex-shrink-0" title="Delete Property">
+                          <Trash2 size={14} />
+                        </button>
+                        <button onClick={() => openScheduleJob(p)} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 w-8 h-8 rounded flex items-center justify-center transition-colors shadow-sm flex-shrink-0 border border-blue-500/30" title="Schedule Service">
+                          <Plus size={16} />
+                        </button>
+                      </div>
                     </div>
                     
                     {p.access_notes && (
@@ -440,6 +487,33 @@ export default function CustomerDetail() {
                 <button type="button" onClick={() => setIsEditingCustomer(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
                 <button type="submit" disabled={isUpdatingCustomer || !editCustomerForm.first_name} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
                   {isUpdatingCustomer ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PROPERTY MODAL */}
+      {isEditingProperty && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-forest-900 border border-white/10 p-6 rounded-xl w-full max-w-lg shadow-2xl relative">
+            <h2 className="text-xl font-serif font-bold text-white mb-6">Edit Property</h2>
+            <form onSubmit={handleUpdateProperty} className="space-y-4">
+              <input required placeholder="Address Line 1" value={editPropertyForm.address_line1 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line1: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              <input placeholder="Address Line 2 (Apt, Suite, etc.)" value={editPropertyForm.address_line2 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line2: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              
+              <div className="grid grid-cols-2 gap-3">
+                <input placeholder="City" value={editPropertyForm.city || ''} onChange={e => setEditPropertyForm({...editPropertyForm, city: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+                <input placeholder="Nickname (e.g. Main House)" value={editPropertyForm.nickname || ''} onChange={e => setEditPropertyForm({...editPropertyForm, nickname: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              </div>
+              
+              <textarea placeholder="Gate codes, dogs, access notes..." value={editPropertyForm.access_notes || ''} onChange={e => setEditPropertyForm({...editPropertyForm, access_notes: e.target.value})} rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              
+              <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setIsEditingProperty(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={isUpdatingProperty || !editPropertyForm.address_line1} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
+                  {isUpdatingProperty ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
