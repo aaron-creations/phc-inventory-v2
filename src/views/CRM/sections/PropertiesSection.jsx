@@ -141,7 +141,7 @@ export default function PropertiesSection() {
                       )}
                     </td>
                     <td className="p-4">
-                      <span className="text-white/60 text-sm">{p.city || '—'}</span>
+                      <span className="text-white/60 text-sm">{p.city || '—'}{p.state ? `, ${p.state}` : ''}{p.zip ? ` ${p.zip}` : ''}</span>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end items-center gap-2">

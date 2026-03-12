@@ -367,7 +367,7 @@ export default function CustomerDetail() {
                       <div>
                         <div className="text-white font-medium text-sm leading-tight">{p.address_line1}</div>
                         {p.address_line2 && <div className="text-white/60 text-xs mt-0.5">{p.address_line2}</div>}
-                        {p.city && <div className="text-white/40 text-xs mt-0.5">{p.city}</div>}
+                        {(p.city || p.state || p.zip) && <div className="text-white/40 text-xs mt-0.5">{p.city || ''}{p.state ? `, ${p.state}` : ''}{p.zip ? ` ${p.zip}` : ''}</div>}
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={() => openEditProperty(p)} className="bg-white/5 text-white/50 hover:bg-white/10 hover:text-white w-8 h-8 rounded flex items-center justify-center transition-colors shadow-sm flex-shrink-0" title="Edit Property">

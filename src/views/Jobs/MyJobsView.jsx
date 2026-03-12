@@ -27,7 +27,7 @@ export default function MyJobsView() {
       .select(`
         *,
         crm_customers ( first_name, last_name, phone_mobile ),
-        crm_properties ( address_line1, city, nickname, access_notes )
+        crm_properties ( address_line1, city, state, zip, nickname, access_notes )
       `)
       .eq('technician_id', techId)
       .in('status', ['scheduled', 'in_progress'])
@@ -124,7 +124,7 @@ export default function MyJobsView() {
                   <MapPin size={16} className="text-white/30 shrink-0 mt-0.5" />
                   <div>
                     <a 
-                      href={`https://maps.google.com/?q=${encodeURIComponent(`${job.crm_properties?.address_line1}, ${job.crm_properties?.city || ''}`)}`}
+                      href={`https://maps.google.com/?q=${encodeURIComponent(`${job.crm_properties?.address_line1}, ${job.crm_properties?.city || ''}, ${job.crm_properties?.state || ''} ${job.crm_properties?.zip || ''}`.trim())}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-white/80 text-sm hover:text-blue-400 transition-colors flex items-center gap-1"
@@ -132,7 +132,7 @@ export default function MyJobsView() {
                     >
                       {job.crm_properties?.address_line1} <span className="text-[10px] text-blue-400/50 uppercase tracking-wider font-bold ml-1">(Map)</span>
                     </a>
-                    <div className="text-white/40 text-xs mt-0.5">{job.crm_properties?.city} {job.crm_properties?.nickname && `(${job.crm_properties.nickname})`}</div>
+                    <div className="text-white/40 text-xs mt-0.5">{job.crm_properties?.city}{job.crm_properties?.state ? `, ${job.crm_properties.state}` : ''}{job.crm_properties?.zip ? ` ${job.crm_properties.zip}` : ''} {job.crm_properties?.nickname && `(${job.crm_properties.nickname})`}</div>
                   </div>
                 </div>
 
