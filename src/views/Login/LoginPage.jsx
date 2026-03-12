@@ -74,7 +74,7 @@ export default function LoginPage() {
         {/* Brand mark — logo only, text is in the badge */}
         <div className="flex items-center gap-3 relative z-10">
           <img src="/phc-logo.png" alt="PHC" className="w-12 h-12" />
-          <p className="text-white/40 text-xs">Inventory v2</p>
+          <p className="text-white/40 text-xs">Systems</p>
         </div>
 
         {/* Hero */}
@@ -90,13 +90,13 @@ export default function LoginPage() {
             <span className="text-brand-green">Track everything.</span>
           </h1>
           <p className="text-white/40 text-center text-base max-w-sm leading-relaxed">
-            The complete Plant Health Care inventory platform — blend rates, technician logs, and real-time stock levels, all in one place.
+            The complete Plant Health Care operations platform — CRM, Fleet management, blend rates, technician logs, and real-time stock levels, all in one place.
           </p>
         </div>
 
         {/* Feature pills */}
         <div className="flex flex-wrap gap-2 relative z-10">
-          {['📦 Real-time Stock', '🧬 Blend Mix Rates', '👤 Tech Logging', '📊 Analytics', '🔒 Role-Based Access'].map(f => (
+          {['📦 Real-time Stock', '🧬 Blend Mix Rates', '👤 Tech Logging', '📊 Analytics', '🤝 CRM', '🚚 Fleet', '🔒 Role-Based Access'].map(f => (
             <span key={f} className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-white/40">
               {f}
             </span>
