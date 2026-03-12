@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
-import { Calendar, Plus, X, User, MapPin } from 'lucide-react'
+import { Calendar, Plus, X, User, MapPin, Edit, Trash2 } from 'lucide-react'
 
 export default function JobsSection() {
   const [jobs, setJobs] = useState([])
@@ -9,6 +9,11 @@ export default function JobsSection() {
   // Create Job Modal
   const [isCreating, setIsCreating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  // Edit Job State
+  const [isEditingJob, setIsEditingJob] = useState(false)
+  const [editJobForm, setEditJobForm] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   
   // Job Form Data
   const [customers, setCustomers] = useState([])
@@ -137,6 +142,46 @@ export default function JobsSection() {
     const { error } = await supabase.from('crm_jobs').update({ status: newStatus }).eq('id', id)
     if (!error) {
       setJobs(jobs.map(j => j.id === id ? { ...j, status: newStatus } : j))
+    }
+  }
+
+  function openEditJob(job) {
+    setEditJobForm({
+      id: job.id,
+      service_type: job.service_type || '',
+      scheduled_date: job.scheduled_date || '',
+      technician_id: job.technician_id || '',
+      quoted_price: job.quoted_price || '',
+      customer_name: `${job.crm_customers?.first_name} ${job.crm_customers?.last_name}`,
+      property_name: job.crm_properties?.address_line1 || job.crm_properties?.nickname
+    })
+    setIsEditingJob(true)
+  }
+
+  async function handleSaveJobEdit(e) {
+    e.preventDefault()
+    setSavingEdit(true)
+    const { error } = await supabase.from('crm_jobs').update({
+      service_type: editJobForm.service_type,
+      scheduled_date: editJobForm.scheduled_date || null,
+      technician_id: editJobForm.technician_id || null,
+      quoted_price: editJobForm.quoted_price ? parseFloat(editJobForm.quoted_price) : null
+    }).eq('id', editJobForm.id)
+    
+    setSavingEdit(false)
+    if (error) {
+      alert(`Error updating job: ${error.message}`)
+    } else {
+      setIsEditingJob(false)
+      fetchJobs() // refresh to get all relations accurately mapped
+    }
+  }
+
+  async function handleDeleteJob(id) {
+    if (confirm('Are you sure you want to delete this job? This cannot be undone.')) {
+      const { error } = await supabase.from('crm_jobs').delete().eq('id', id)
+      if (error) alert(`Error deleting job: ${error.message}`)
+      else setJobs(jobs.filter(j => j.id !== id))
     }
   }
 
@@ -276,7 +321,7 @@ export default function JobsSection() {
             {upcomingJobs.length === 0 ? (
               <div className="col-span-full p-8 bg-forest-900 border border-white/5 rounded-xl text-center text-white/40">No active jobs.</div>
             ) : upcomingJobs.map(job => (
-              <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} />
+              <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
             ))}
           </div>
         </section>
@@ -288,18 +333,69 @@ export default function JobsSection() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-75">
               {completedJobs.slice(0, 10).map(job => (
-                <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} />
+                <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
               ))}
             </div>
           </section>
         )}
       </div>
 
+      {isEditingJob && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-forest-900 border border-white/10 p-6 rounded-xl w-full max-w-lg shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-serif font-bold text-white mb-1">Edit Job</h2>
+                <div className="text-xs text-white/50">{editJobForm.customer_name} • {editJobForm.property_name}</div>
+              </div>
+              <button title="Close" onClick={() => setIsEditingJob(false)} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveJobEdit} className="space-y-4">
+              <div>
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Service Type *</label>
+                <input required value={editJobForm.service_type || ''} onChange={e => setEditJobForm({...editJobForm, service_type: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Date</label>
+                  <input type="date" value={editJobForm.scheduled_date || ''} onChange={e => setEditJobForm({...editJobForm, scheduled_date: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" style={{colorScheme: 'dark'}} />
+                </div>
+                <div>
+                  <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Quoted Price ($)</label>
+                  <input type="number" step="0.01" min="0" value={editJobForm.quoted_price || ''} onChange={e => setEditJobForm({...editJobForm, quoted_price: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Assign To Technician</label>
+                <select value={editJobForm.technician_id || ''} onChange={e => setEditJobForm({...editJobForm, technician_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                  <option value="" className="bg-forest-900">Unassigned</option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id} className="bg-forest-900">{t.first_name} {t.last_initial}.</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setIsEditingJob(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={savingEdit || !editJobForm.service_type} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-forest-950 font-semibold rounded-lg transition-colors text-sm disabled:opacity-50">
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
 
-function JobCard({ job, onStatusChange }) {
+function JobCard({ job, onStatusChange, onEdit, onDelete }) {
   const isCompleted = job.status === 'completed'
   const isCancelled = job.status === 'cancelled'
   const isInProgress = job.status === 'in_progress'
@@ -313,7 +409,11 @@ function JobCard({ job, onStatusChange }) {
     }`}>
       <div>
         <div className="flex justify-between items-start mb-3 gap-2">
-          <h3 className="text-white font-bold leading-tight">{job.service_type}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-white font-bold leading-tight">{job.service_type}</h3>
+            <button onClick={() => onEdit(job)} className="text-white/40 hover:text-white transition-colors" title="Edit Job"><Edit size={14}/></button>
+            <button onClick={() => onDelete(job.id)} className="text-red-500/60 hover:text-red-400 transition-colors" title="Delete Job"><Trash2 size={14}/></button>
+          </div>
           
           <select 
             value={job.status}
