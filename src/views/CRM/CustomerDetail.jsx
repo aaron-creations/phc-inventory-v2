@@ -121,6 +121,8 @@ export default function CustomerDetail() {
     setNewJob({ 
       service_type: 'Spring Fert', 
       scheduled_date: '', 
+      start_time: '',
+      end_time: '',
       technician_id: '', 
       quoted_price: '',
       is_recurring: false,
@@ -134,6 +136,25 @@ export default function CustomerDetail() {
     e.preventDefault()
     setIsScheduling(true)
 
+    // Check for double booking for single jobs
+    if (!newJob.is_recurring && newJob.technician_id && newJob.scheduled_date && newJob.start_time && newJob.end_time) {
+      // Since `jobs` state only has THIS customer's jobs, we must query DB for tech's schedule
+      const { data: conflicts } = await supabase
+        .from('crm_jobs')
+        .select('id')
+        .eq('technician_id', newJob.technician_id)
+        .eq('scheduled_date', newJob.scheduled_date)
+        .not('status', 'in', '("cancelled", "completed")')
+        .lt('start_time', newJob.end_time)
+        .gt('end_time', newJob.start_time);
+        
+      if (conflicts && conflicts.length > 0) {
+        alert("This technician is already booked during this time slot on this date.");
+        setIsScheduling(false)
+        return;
+      }
+    }
+
     if (newJob.is_recurring) {
       // 1. Create the recurring schedule
       const { data: scheduleData, error: scheduleError } = await supabase
@@ -146,7 +167,9 @@ export default function CustomerDetail() {
           technician_id: newJob.technician_id || null,
           frequency: newJob.frequency,
           interval_days: newJob.frequency === 'custom' ? parseInt(newJob.interval_days) : null,
-          start_date: newJob.scheduled_date
+          start_date: newJob.scheduled_date,
+          start_time: newJob.start_time || null,
+          end_time: newJob.end_time || null
         }])
         .select()
         .single()
@@ -181,6 +204,8 @@ export default function CustomerDetail() {
       customer_id: customer.id,
       status: 'scheduled',
       technician_id: newJob.technician_id || null,
+      start_time: newJob.start_time || null,
+      end_time: newJob.end_time || null,
       quoted_price: newJob.quoted_price ? parseFloat(newJob.quoted_price) : null
     }]).select().single()
 
@@ -539,15 +564,24 @@ export default function CustomerDetail() {
                  <input required placeholder="e.g. Spring Fert, Tree Spray..." value={newJob.service_type} onChange={e => setNewJob({...newJob, service_type: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                </div>
 
-               <div className="grid grid-cols-2 gap-4">
-                 <div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div className="md:col-span-1">
                    <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Date</label>
                    <input type="date" value={newJob.scheduled_date} onChange={e => setNewJob({...newJob, scheduled_date: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" style={{colorScheme: 'dark'}} />
                  </div>
-                 <div>
-                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Quoted Price ($)</label>
-                   <input type="number" step="0.01" min="0" placeholder="0.00" value={newJob.quoted_price} onChange={e => setNewJob({...newJob, quoted_price: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+                 <div className="md:col-span-1">
+                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Start Time</label>
+                   <input type="time" value={newJob.start_time} onChange={e => setNewJob({...newJob, start_time: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" style={{colorScheme: 'dark'}} />
                  </div>
+                 <div className="md:col-span-1">
+                   <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">End Time</label>
+                   <input type="time" value={newJob.end_time} onChange={e => setNewJob({...newJob, end_time: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" style={{colorScheme: 'dark'}} />
+                 </div>
+               </div>
+
+               <div className="mt-4">
+                 <label className="block text-white/40 text-[10px] uppercase font-bold tracking-wider mb-1.5">Quoted Price ($)</label>
+                 <input type="number" step="0.01" min="0" placeholder="0.00" value={newJob.quoted_price} onChange={e => setNewJob({...newJob, quoted_price: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
                </div>
 
                <div>
