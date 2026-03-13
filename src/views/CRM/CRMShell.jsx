@@ -11,8 +11,8 @@ const NAV_ITEMS = [
   { path: 'leads',      label: 'Leads',      icon: '🎯' },
   { path: 'customers',  label: 'Customers',  icon: '🤝' },
   { path: 'properties', label: 'Properties', icon: '🏠' },
-  { path: 'jobs',       label: 'Jobs',       icon: '🗓️' },
-  { path: 'recurring',  label: 'Recurring',  icon: '🔁' },
+  { path: 'jobs',       label: 'Scheduled Jobs', icon: '🗓️' },
+  { path: 'recurring',  label: 'Recurring Jobs', icon: '🔁' },
 ]
 
 export default function CRMShell() {
