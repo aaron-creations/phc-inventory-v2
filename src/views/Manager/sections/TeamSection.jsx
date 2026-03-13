@@ -18,7 +18,9 @@ export default function TeamSection() {
 
     if (!techs?.length) return
 
+    // Fetch usage transactions for all technicians
     const now = new Date()
+    const todayStr   = format(now, 'yyyy-MM-dd')
     const weekStart  = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
     const monthStart = format(startOfMonth(now), 'yyyy-MM-dd')
 
@@ -26,6 +28,7 @@ export default function TeamSection() {
       .from('transactions')
       .select('technician_id, amount, date, type')
       .in('type', ['USAGE', 'BLEND'])
+      .lte('date', todayStr)
       .order('date', { ascending: false })
 
     const stats = {}
@@ -67,6 +70,7 @@ export default function TeamSection() {
     <div className="p-6 max-w-2xl">
       <h2 className="text-white font-bold text-xl mb-6">Team</h2>
 
+      {/* Technician Cards */}
       <div className="flex flex-col gap-3 mb-8">
         {technicians.length === 0 ? (
           <p className="text-white/30 text-sm text-center py-8 glass rounded-xl">No technicians added yet.</p>
@@ -75,6 +79,7 @@ export default function TeamSection() {
           const isExpanded = expanded[tech.id]
           return (
             <div key={tech.id} className="glass rounded-xl overflow-hidden">
+              {/* Header row */}
               <div
                 className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition-all"
                 onClick={() => setExpanded(e => ({ ...e, [tech.id]: !e[tech.id] }))}
@@ -108,6 +113,7 @@ export default function TeamSection() {
                 </div>
               </div>
 
+              {/* Expanded Stats */}
               {isExpanded && (
                 <div className="border-t border-white/5 px-4 pb-4 pt-3">
                   <div className="grid grid-cols-3 gap-3">
@@ -122,6 +128,7 @@ export default function TeamSection() {
         })}
       </div>
 
+      {/* Add Technician */}
       <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3">Add Technician</h3>
       <div className="flex gap-2 mb-2">
         <input type="text" placeholder="First name" value={newName} onChange={e => setNewName(e.target.value)}
