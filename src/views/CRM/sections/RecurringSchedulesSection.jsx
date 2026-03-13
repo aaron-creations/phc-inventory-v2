@@ -57,7 +57,7 @@ export default function RecurringSchedulesSection() {
         .from('crm_jobs')
         .delete()
         .eq('recurring_schedule_id', id)
-        .eq('status', 'scheduled')
+        .ilike('status', 'scheduled')
         
       if (jobsError) {
         alert(`Error deleting associated upcoming jobs: ${jobsError.message}`)
