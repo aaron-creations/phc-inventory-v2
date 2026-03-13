@@ -46,11 +46,15 @@ function calculateJobStyle(job) {
   }
 }
 
-function QuickJobCard({ job, onEdit }) {
+function QuickJobCard({ job, onEdit, isMonthView = false }) {
   const isCompleted = job.status === 'completed'
   const isCancelled = job.status === 'cancelled'
   const isInProgress = job.status === 'in_progress'
   const hasTime = job.start_time && job.end_time
+  
+  // Only apply absolute positioning/height if we have time AND we are not in the month view
+  const applyTimeStyle = hasTime && !isMonthView
+  const style = applyTimeStyle ? calculateJobStyle(job) : { position: 'relative', marginBottom: '4px' }
 
   return (
     <div 
@@ -60,8 +64,8 @@ function QuickJobCard({ job, onEdit }) {
         isInProgress ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' : 
         isCancelled ? 'bg-red-500/10 border-red-500/20 text-red-500/50 line-through' :
         'bg-blue-500/10 border-blue-500/20 text-blue-300 hover:bg-blue-500/20'
-      } ${hasTime ? 'overflow-hidden shadow-md' : 'mb-1 relative'}`}
-      style={hasTime ? calculateJobStyle(job) : {}}
+      } ${applyTimeStyle ? 'overflow-hidden shadow-md' : 'mb-1'}`}
+      style={style}
       title={`${job.service_type} - ${job.crm_customers?.last_name}`}
     >
       <div className="font-bold truncate leading-none mb-0.5">{job.service_type}</div>
@@ -249,7 +253,7 @@ export default function JobsCalendarView({ jobs, onStatusChange, onEdit, onDelet
                 </div>
                 <div className="flex flex-col gap-1 overflow-y-auto max-h-[80px] no-scrollbar">
                   {dayJobs.map(job => (
-                    <QuickJobCard key={job.id} job={job} onEdit={onEdit} />
+                    <QuickJobCard key={job.id} job={job} onEdit={onEdit} isMonthView={true} />
                   ))}
                 </div>
               </div>
