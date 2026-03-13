@@ -30,7 +30,7 @@ export default function HubPage() {
       </p>
 
       <div className="w-full max-w-sm grid grid-cols-1 gap-4">
-        {/* Inventory App - All approved users */}
+        {/* Field Operations App - All approved users */}
         <Link 
           to="/" 
           className="flex items-center p-6 bg-forest-900 border border-forest-800 rounded-2xl hover:bg-forest-800 hover:border-forest-700 transition-all group"
@@ -39,7 +39,7 @@ export default function HubPage() {
             <Package size={24} />
           </div>
           <div>
-            <h2 className="text-white font-semibold text-lg mb-1">Inventory</h2>
+            <h2 className="text-white font-semibold text-lg mb-1">Field Operations</h2>
             <p className="text-forest-300 text-sm">Dashboard, logs, & stock levels</p>
           </div>
         </Link>

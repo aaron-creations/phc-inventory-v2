@@ -96,7 +96,7 @@ export default function Dashboard() {
 
       {/* Title */}
       <h1 className="font-serif text-4xl font-bold text-white text-center leading-tight mb-1">
-        Daily Usage<br />Log
+        Technician<br />Dashboard
       </h1>
       <p className="text-white/50 text-sm mb-6">
         {format(new Date(), 'EEEE, MMMM d')}
