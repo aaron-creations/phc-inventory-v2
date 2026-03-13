@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { 
   format, addDays, subDays, startOfWeek, endOfWeek, 
   startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, addWeeks, subWeeks, parseISO 
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, Clock } from 'lucide-react'
 
 // Helpful constants
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7) // 7 AM to 6 PM
@@ -21,6 +21,7 @@ function calculateJobStyle(job) {
   const end = timeToFraction(job.end_time)
   
   if (start === null || end === null) {
+    // Fallback if no time assigned - show it as an all-day or placed at top
     return { top: '0%', height: 'auto', minHeight: '3rem', position: 'relative' }
   }
 
