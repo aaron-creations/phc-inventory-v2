@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
-import { Search, MapPin, User, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle, MoreVertical, Plus, Calendar as CalendarIcon, List } from 'lucide-react'
+import { Search, MapPin, User, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle, MoreVertical, Plus, Calendar as CalendarIcon, List, RefreshCw } from 'lucide-react'
 import JobsCalendarView from './JobsCalendarView' // Import the new calendar component
 
 export default function JobsSection() {
