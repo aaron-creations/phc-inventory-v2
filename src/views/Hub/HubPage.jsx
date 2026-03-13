@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { Package, Users, Truck, LogOut, Settings } from 'lucide-react'
+import { Package, Users, Truck, LogOut, Settings, LayoutDashboard } from 'lucide-react'
 
 export default function HubPage() {
   const { profile, signOut } = useAuth()
   const isManager = profile?.role === 'manager'
+  
+  const tech = profile?.technicians
+  const firstName = tech?.first_name || profile?.first_name || profile?.email?.split('@')[0] || 'Team Member'
 
   return (
     <div className="min-h-screen bg-forest-950 flex flex-col items-center pt-8 px-4 pb-24">
@@ -23,7 +26,7 @@ export default function HubPage() {
       </div>
       
       <p className="w-full max-w-sm text-forest-200 mb-8 pl-1">
-        Welcome back, <span className="text-white font-medium">{profile?.first_name || 'Team Member'}</span>. Where to?
+        Welcome back, <span className="text-white font-medium">{firstName}</span>. Where to?
       </p>
 
       <div className="w-full max-w-sm grid grid-cols-1 gap-4">
@@ -40,6 +43,22 @@ export default function HubPage() {
             <p className="text-forest-300 text-sm">Dashboard, logs, & stock levels</p>
           </div>
         </Link>
+
+        {/* Manager View - Managers only */}
+        {isManager && (
+          <Link 
+            to="/manager" 
+            className="flex items-center p-6 bg-forest-900 border border-forest-800 rounded-2xl hover:bg-forest-800 hover:border-forest-700 transition-all group"
+          >
+            <div className="w-12 h-12 rounded-xl bg-yellow-500/20 text-yellow-500 flex items-center justify-center mr-5 group-hover:scale-110 transition-transform">
+              <LayoutDashboard size={24} />
+            </div>
+            <div>
+              <h2 className="text-white font-semibold text-lg mb-1">Manager View</h2>
+              <p className="text-forest-300 text-sm">Analytics, inventory & history</p>
+            </div>
+          </Link>
+        )}
 
         {/* CRM App - Managers only */}
         {isManager && (
@@ -81,7 +100,7 @@ export default function HubPage() {
               <Settings size={24} />
             </div>
             <div>
-              <h2 className="text-white font-semibold text-lg mb-1">Admin</h2>
+              <h2 className="text-white font-semibold text-lg mb-1">Administrative</h2>
               <p className="text-forest-300 text-sm">Team, users, & settings</p>
             </div>
           </Link>
