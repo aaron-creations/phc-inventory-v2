@@ -7,6 +7,7 @@ export default function TeamSection() {
   const [techStats, setTechStats] = useState({})
   const [newName, setNewName] = useState('')
   const [newInitial, setNewInitial] = useState('')
+  const [newEmployeeId, setNewEmployeeId] = useState('')
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState({})
 
@@ -53,9 +54,10 @@ export default function TeamSection() {
     await supabase.from('technicians').insert({
       first_name: newName.trim(),
       last_initial: newInitial.trim().toUpperCase() || null,
+      employee_id: newEmployeeId.trim() || null,
       color_hex: '#4ade80',
     })
-    setNewName(''); setNewInitial('')
+    setNewName(''); setNewInitial(''); setNewEmployeeId('')
     await load()
     setSaving(false)
   }
@@ -94,6 +96,9 @@ export default function TeamSection() {
                   <p className="text-white font-medium">
                     {tech.first_name} {tech.last_initial ? `${tech.last_initial}.` : ''}
                   </p>
+                  {tech.employee_id && (
+                    <p className="text-white/30 text-xs font-mono">ID: {tech.employee_id}</p>
+                  )}
                   {s.lastDate ? (
                     <p className="text-white/30 text-xs">
                       Last active: {format(new Date(s.lastDate + 'T00:00:00'), 'MMM d, yyyy')}
@@ -135,6 +140,10 @@ export default function TeamSection() {
           className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30 focus:border-brand-green/50" />
         <input type="text" placeholder="Last initial" value={newInitial} onChange={e => setNewInitial(e.target.value)} maxLength={1}
           className="w-20 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30 focus:border-brand-green/50" />
+      </div>
+      <div className="mb-2">
+        <input type="text" placeholder="Employee ID (optional)" value={newEmployeeId} onChange={e => setNewEmployeeId(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30 focus:border-brand-green/50 font-mono" />
       </div>
       <button onClick={addTech} disabled={saving || !newName.trim()}
         className="w-full py-2.5 rounded-xl bg-brand-green text-forest-950 font-semibold text-sm disabled:opacity-40 hover:bg-brand-green/90 transition-all">

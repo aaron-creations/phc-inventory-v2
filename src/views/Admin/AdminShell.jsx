@@ -1,5 +1,8 @@
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+// NOTE (M-2 tech debt): AdminShell imports sections from Manager/sections directly.
+// These are intentionally shared components. If ManagerPanel is refactored, update
+// these imports too. Long-term: extract a shared <AppShell> layout component.
 import TeamSection from '../Manager/sections/TeamSection'
 import UsersSection from '../Manager/sections/UsersSection'
 import SettingsSection from '../Manager/sections/SettingsSection'

@@ -7,10 +7,10 @@ import MaintenanceHistorySection from './sections/MaintenanceHistorySection'
 import AssetDetail from './sections/AssetDetail'
 
 const NAV_ITEMS = [
-  { path: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { path: 'equipment', label: 'Equipment', icon: '🚚' },
-  { path: 'recurring', label: 'Recurring', icon: '📅' },
-  { path: 'history',   label: 'History',   icon: '📋' },
+  { path: 'dashboard', label: 'Dashboard', icon: '📊', soon: true },
+  { path: 'equipment', label: 'Equipment', icon: '🚚', soon: false },
+  { path: 'recurring', label: 'Recurring', icon: '📅', soon: true },
+  { path: 'history',   label: 'History',   icon: '📋', soon: true },
 ]
 
 export default function FleetShell() {
@@ -56,7 +56,10 @@ export default function FleetShell() {
               }`}
             >
               <span className="text-sm md:text-base w-4 md:w-5 text-center">{item.icon}</span>
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className="whitespace-nowrap flex-1">{item.label}</span>
+              {item.soon && (
+                <span className="hidden md:inline text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-white/30">Soon</span>
+              )}
             </button>
           ))}
         </nav>

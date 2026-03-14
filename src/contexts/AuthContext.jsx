@@ -50,6 +50,9 @@ export function AuthProvider({ children }) {
   const warnTimerRef    = useRef(null)
   const countdownRef    = useRef(null)
   const isLoggedIn      = useRef(false)
+  // Ref mirrors showWarning so resetIdleTimer always reads the current value
+  // without needing to be re-memoized whenever warning state changes.
+  const showWarningRef  = useRef(false)
 
   /* ── signOut ──────────────────────────────────────── */
   async function signOut() {
@@ -92,12 +95,18 @@ export function AuthProvider({ children }) {
     }, 1000)
   }
 
+  /* ── resetIdleTimer ──────────────────────────────────
+     Uses showWarningRef (not showWarning state) to avoid stale closures.
+     This means no eslint-disable is needed and event listeners never
+     need to be re-attached when the warning toggles.
+   ──────────────────────────────────────────────────── */
   const resetIdleTimer = useCallback(() => {
     if (!isLoggedIn.current) return
 
     // If warning was showing, dismiss it
-    if (showWarning) {
+    if (showWarningRef.current) {
       setShowWarning(false)
+      showWarningRef.current = false
       clearInterval(countdownRef.current)
     }
 
@@ -106,6 +115,7 @@ export function AuthProvider({ children }) {
     // Set warning to appear WARN_BEFORE_MS before logout
     warnTimerRef.current = setTimeout(() => {
       setShowWarning(true)
+      showWarningRef.current = true
       startCountdown()
     }, IDLE_TIMEOUT_MS - WARN_BEFORE_MS)
 
@@ -113,8 +123,7 @@ export function AuthProvider({ children }) {
     idleTimerRef.current = setTimeout(() => {
       signOut()
     }, IDLE_TIMEOUT_MS)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showWarning])
+  }, []) // No deps needed — reads only stable refs
 
   /* ── "Stay logged in" handler ─────────────────────── */
   function handleStayLoggedIn() {
@@ -163,8 +172,7 @@ export function AuthProvider({ children }) {
       clearAllTimers()
       ACTIVITY_EVENTS.forEach(evt => window.removeEventListener(evt, resetIdleTimer))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!session])  // Only re-run when login STATE changes (not on every session object update)
+  }, [!!session, resetIdleTimer])  // Only re-run when login STATE changes
 
   /* ── Context value ────────────────────────────────── */
   const value = {
