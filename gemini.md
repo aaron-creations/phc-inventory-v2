@@ -146,7 +146,12 @@ src/
     Login/
       LoginPage.jsx    # Landing login — Google OAuth + Email/Password/Magic Link
       AccessPending.jsx # Shown to users awaiting manager approval
+    Hub/               # HubPage — App home for navigation
     Dashboard/         # Main technician landing screen
+    Jobs/              # MyJobsView
+    CRM/               # CRMShell and sections
+    Admin/             # AdminShell and users/team config
+    Fleet/             # FleetShell and equipment tracking
     Logging/           # LoggingFlow — Single + Blend modes
     Stock/             # Stock Levels view with status filters
     MixRates/          # Mix Rates reference guide
@@ -204,3 +209,4 @@ src/
 | 2026-03-10 | Phase 4 (Stylize/Security) complete — Global auth, RBAC, Google OAuth, approval flow, new badge logo | System Pilot |
 | 2026-03-10 | RLS recursion bug fixed — `get_my_role()` SECURITY DEFINER function added | System Pilot |
 | 2026-03-10 | MVP1 signed off — all screens verified, GitHub pushed, Vercel deployment initiated | System Pilot |
+| 2026-03-13 | Massive Audit Remediation — fixed DB schema constraints, RLS policies, routing bugs, math conversion rules, duplicated UI, state leaks, and added team employee_id integrations | System Pilot |
