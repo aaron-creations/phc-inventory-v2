@@ -4,6 +4,25 @@ import { supabase } from '../../lib/supabaseClient'
 import { format } from 'date-fns'
 import { useAuth } from '../../contexts/AuthContext'
 
+/* ── Unit conversion helper ─────────────────────────────────────
+   Converts a container (size × unit) to millilitres.
+   This is the single source of truth for direct-use stock math.
+   Supported container_unit values from DB: gal, pint, qt, liter, oz
+   ──────────────────────────────────────────────────────────────── */
+const ML_PER_UNIT = {
+  gal:     3785.41,
+  pint:     473.176,
+  qt:       946.353,
+  liter:   1000,
+  oz:        29.5735,
+  'fl oz':   29.5735,
+}
+
+function containerSizeToMl(containerSize, containerUnit) {
+  const factor = ML_PER_UNIT[containerUnit?.toLowerCase()] ?? 473.176 // fallback: pint
+  return containerSize * factor
+}
+
 export default function LoggingFlow() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -24,6 +43,7 @@ export default function LoggingFlow() {
   const [selectedJobId, setSelectedJobId] = useState(initialJobId)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -65,6 +85,7 @@ export default function LoggingFlow() {
 
   async function handleSubmit() {
     if (submitting || !linkedTech) return
+    setSubmitError(null)
 
     // --- Validation Phase ---
     for (const log of logs) {
@@ -78,9 +99,9 @@ export default function LoggingFlow() {
         const product = getProduct(log.productId)
         if (product) {
           const amountInContainers = product.unit_type === 'direct'
-            ? amount / (product.container_size * 473.176)
+            ? amount / containerSizeToMl(product.container_size, product.container_unit)
             : amount / product.container_size
-            
+
           if (amountInContainers > product.containers_in_stock + 0.0001) {
             alert(`Cannot submit: The amount for ${product.name} exceeds available inventory.`)
             return
@@ -93,7 +114,7 @@ export default function LoggingFlow() {
           if (!product) continue
           const flOzUsed = (amount / 100) * comp.rate_fl_oz_per_100_gal
           const containersUsed = flOzUsed / (product.container_size * 128)
-          
+
           if (containersUsed > product.containers_in_stock + 0.0001) {
             alert(`Cannot submit blend: Not enough stock of ${product.name}.`)
             return
@@ -107,8 +128,12 @@ export default function LoggingFlow() {
       for (const log of logs) {
         if (mode === 'single' && log.productId && log.amount) {
           const product = getProduct(log.productId)
-          const cost = product?.cost_per_container
-            ? (parseFloat(log.amount) / (product.container_size * 128)) * product.cost_per_container
+
+          // Use consistent unit math for cost (convert ml capacity → fl oz, then ratio to cost)
+          const containerMl = containerSizeToMl(product.container_size, product.container_unit)
+          const containerFlOz = containerMl / ML_PER_UNIT['oz']
+          const cost = product?.cost_per_container && containerFlOz > 0
+            ? (parseFloat(log.amount) / containerFlOz) * product.cost_per_container
             : null
 
           await supabase.from('transactions').insert({
@@ -122,11 +147,11 @@ export default function LoggingFlow() {
             crm_job_id: selectedJobId || null,
           })
 
-          // Decrement stock
+          // Decrement stock using correct container unit
           const currentProduct = products.find(p => p.id === log.productId)
           if (currentProduct) {
             const amountInContainers = currentProduct.unit_type === 'direct'
-              ? parseFloat(log.amount) / (currentProduct.container_size * 473.176)
+              ? parseFloat(log.amount) / containerSizeToMl(currentProduct.container_size, currentProduct.container_unit)
               : parseFloat(log.amount) / currentProduct.container_size
             await supabase
               .from('products')
@@ -149,7 +174,7 @@ export default function LoggingFlow() {
             crm_job_id: selectedJobId || null,
           })
 
-          // Decrement each component
+          // Decrement each component (blend components use fl oz rates → gallon containers)
           for (const comp of components) {
             const flOzUsed = (gallons / 100) * comp.rate_fl_oz_per_100_gal
             const product = comp.products
@@ -166,7 +191,8 @@ export default function LoggingFlow() {
       setSuccess(true)
       setTimeout(() => navigate('/'), 1500)
     } catch (err) {
-      console.error(err)
+      console.error('Log submit failed:', err)
+      setSubmitError(err?.message || 'Something went wrong submitting your log. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -187,10 +213,10 @@ export default function LoggingFlow() {
             Your account isn't linked to a technician profile yet. Ask your manager to set this up in the Team section.
           </p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/hub')}
             className="text-white/60 hover:text-white text-sm transition-colors"
           >
-            ← Back to Dashboard
+            ← Back to Hub
           </button>
         </div>
       </div>
@@ -213,7 +239,7 @@ export default function LoggingFlow() {
     <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
       {/* Header */}
       <div className="flex items-center mb-6">
-        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">← Back</button>
+        <button onClick={() => navigate('/hub')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">← Back</button>
         <h1 className="text-white font-bold text-lg flex-[2] justify-center truncate px-2">
           {linkedTech.first_name} {linkedTech.last_initial}. — Log
         </h1>
@@ -222,6 +248,15 @@ export default function LoggingFlow() {
           <button onClick={() => navigate('/hub')} className="text-white/50 hover:text-white transition-colors" title="Hub">🏠</button>
         </div>
       </div>
+
+      {/* Submit Error Toast */}
+      {submitError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm flex items-start gap-2">
+          <span className="shrink-0">⚠️</span>
+          <span>{submitError}</span>
+          <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400/60 hover:text-red-300 shrink-0">✕</button>
+        </div>
+      )}
 
       {/* Link to Job (Optional) */}
       <div className="mb-6 px-1">

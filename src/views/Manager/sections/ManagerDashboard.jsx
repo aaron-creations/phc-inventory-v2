@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient'
 import { format } from 'date-fns'
 import LowStockBanner from '../../../components/LowStockBanner'
@@ -11,8 +12,7 @@ export default function ManagerDashboard() {
   const [allProducts, setAllProducts] = useState([])
   const [activeJobs, setActiveJobs] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showUsageModal, setShowUsageModal] = useState(false)
-  const [showRestockModal, setShowRestockModal] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
@@ -133,16 +133,16 @@ export default function ManagerDashboard() {
       {/* Quick Actions */}
       <div className="flex gap-3 mb-8">
         <button
-          onClick={() => setShowUsageModal(true)}
-          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all"
-        >
-          📝 Log Usage
-        </button>
-        <button
-          onClick={() => setShowRestockModal(true)}
+          onClick={() => navigate('/restock')}
           className="px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green text-sm transition-all"
         >
           + Log Restock
+        </button>
+        <button
+          onClick={() => navigate('/manager/inventory')}
+          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all"
+        >
+          📦 Manage Inventory
         </button>
       </div>
 
@@ -169,88 +169,6 @@ export default function ManagerDashboard() {
             </div>
           )
         })}
-      </div>
-
-      {showUsageModal && <UsageModal onClose={() => setShowUsageModal(false)} />}
-      {showRestockModal && <RestockModal onClose={() => setShowRestockModal(false)} />}
-    </div>
-  )
-}
-
-function UsageModal({ onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="glass rounded-2xl p-6 w-full max-w-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-white font-semibold">Log Usage</h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white">✕</button>
-        </div>
-        <p className="text-white/40 text-sm">Use the technician view to log usage. Navigate to the main dashboard and select a technician.</p>
-        <button onClick={onClose} className="mt-4 w-full py-2.5 rounded-xl bg-white/10 text-white text-sm hover:bg-white/15 transition-all">Close</button>
-      </div>
-    </div>
-  )
-}
-
-function RestockModal({ onClose }) {
-  const [products, setProducts] = useState([])
-  const [form, setForm] = useState({ productId: '', containers: '', date: format(new Date(), 'yyyy-MM-dd'), vendor: '', invoice: '' })
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    supabase.from('products').select('id, name').order('name').then(({ data }) => setProducts(data || []))
-  }, [])
-
-  async function save() {
-    if (!form.productId || !form.containers) return
-    setSaving(true)
-    const product = products.find(p => p.id === form.productId)
-    await supabase.from('transactions').insert({
-      type: 'RESTOCK', product_id: form.productId,
-      amount: parseFloat(form.containers), unit: 'containers',
-      vendor: form.vendor, invoice_notes: form.invoice, date: form.date,
-    })
-    await supabase.rpc('increment_stock', { product_id_param: form.productId, amount: parseFloat(form.containers) })
-      .catch(() => {
-        // Fallback if RPC not set up yet
-        supabase.from('products').select('containers_in_stock').eq('id', form.productId).single()
-          .then(({ data }) => {
-            supabase.from('products').update({ containers_in_stock: (data?.containers_in_stock || 0) + parseFloat(form.containers) }).eq('id', form.productId)
-          })
-      })
-    setSaving(false)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="glass rounded-2xl p-6 w-full max-w-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-white font-semibold">+ Log Restock</h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white">✕</button>
-        </div>
-        <div className="flex flex-col gap-3">
-          <select value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))}
-            className="w-full bg-forest-800 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none">
-            <option value="">Select product...</option>
-            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <input type="number" placeholder="Containers added" value={form.containers} onChange={e => setForm(f => ({ ...f, containers: e.target.value }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30" />
-          <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none" />
-          <input type="text" placeholder="Vendor (optional)" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30" />
-          <input type="text" placeholder="Invoice # / notes" value={form.invoice} onChange={e => setForm(f => ({ ...f, invoice: e.target.value }))}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/30" />
-        </div>
-        <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/60 text-sm hover:bg-white/10 transition-all">Cancel</button>
-          <button onClick={save} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-brand-green text-forest-950 text-sm font-semibold disabled:opacity-40 hover:bg-brand-green/90 transition-all">
-            {saving ? 'Saving...' : 'Save Restock'}
-          </button>
-        </div>
       </div>
     </div>
   )
