@@ -38,7 +38,7 @@ export default function MyJobsView() {
         crm_properties ( address_line1, city, state, zip, nickname, access_notes )
       `)
       .eq('technician_id', techId)
-      .in('status', ['scheduled', 'Scheduled', 'in_progress', 'In Progress', 'In_progress'])
+      .in('status', ['scheduled', 'in_progress'])
       .lte('scheduled_date', todayStr)
       .order('scheduled_date', { ascending: true })
 

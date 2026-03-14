@@ -188,20 +188,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Primary Action Buttons */}
-      <div className="w-full flex flex-col gap-3 mb-10">
-        {/* Log Usage — available to all approved users */}
-        <button
-          onClick={() => navigate('/log')}
-          className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-green/10 border border-brand-green/30 hover:bg-brand-green/20 hover:border-brand-green/60 transition-all duration-200 group"
-        >
-          <span className="text-2xl">🧪</span>
-          <span className="text-brand-green font-semibold text-base flex-1 text-left">Log Usage</span>
-          <span className="text-brand-green/40 group-hover:text-brand-green/80 transition-colors">→</span>
-        </button>
-
-        {/* Log Restock — manager only */}
-        {isManager && (
+      {/* Log Restock — manager only quick action */}
+      {isManager && (
+        <div className="w-full flex flex-col gap-3 mb-10">
           <button
             onClick={() => navigate('/restock')}
             className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-brand-orange/10 border border-brand-orange/30 hover:bg-brand-orange/20 hover:border-brand-orange/60 transition-all duration-200 group"
@@ -210,13 +199,12 @@ export default function Dashboard() {
             <span className="text-brand-orange font-semibold text-base flex-1 text-left">Log Restock</span>
             <span className="text-brand-orange/40 group-hover:text-brand-orange/80 transition-colors">→</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto">
-        <NavButton icon="🧬" label="Log Usage" to="/log" color="bg-brand-green" />
-        <NavButton icon="🚛" label="Fleet" to="/fleet" />
+        <NavButton icon="🧪" label="Log Usage" to="/log" color="bg-brand-green/10 border border-brand-green/30 text-brand-green" />
         <NavButton icon="📋" label="Mix Rates" to="/mix-rates" />
         <NavButton icon="📦" label="Stock Levels" to="/stock" />
         <NavButton icon="🗓️" label="My Jobs" to="/my-jobs" />
@@ -235,7 +223,7 @@ function NavButton({ icon, label, to, onClick, color }) {
         if (onClick) onClick()
         else if (to) navigate(to)
       }}
-      className="flex flex-col items-center gap-1 py-3 rounded-xl glass hover:bg-white/10 transition-all duration-200 text-white/70 hover:text-white"
+      className={`flex flex-col items-center gap-1 py-3 rounded-xl glass hover:bg-white/10 transition-all duration-200 text-white/70 hover:text-white ${color || ''}`}
     >
       <span className="text-lg">{icon}</span>
       <span className="text-xs font-medium">{label}</span>
