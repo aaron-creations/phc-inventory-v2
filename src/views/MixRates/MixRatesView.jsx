@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 
@@ -33,12 +33,16 @@ export default function MixRatesView() {
   return (
     <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm">
+      <div className="flex items-center mb-6">
+        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">
           ← Back
         </button>
-        <h1 className="text-white font-bold text-xl flex-1 text-center">📋 Mix Rates</h1>
-        <div className="w-10" />
+        <h1 className="text-white font-bold text-xl flex-[2] text-center whitespace-nowrap">📋 Mix Rates</h1>
+        <div className="flex-1 flex justify-end">
+          <button onClick={() => navigate('/hub')} className="text-white/50 hover:text-white transition-colors" title="Hub">
+            🏠
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -53,7 +57,7 @@ export default function MixRatesView() {
             {blends.map(blend => {
               const blendCost = calcBlendCost(blend.blend_components)
               return (
-                <div key={blend.id} className={`glass rounded-xl p-4 border-l-2 ${badgeColors[blend.badge_color]?.split(' ')[0] || 'border-l-brand-green'}`}>
+                <div key={blend.id} className={`glass rounded-xl p-4 border-l-2 ${badgeColors[blend.badge_color]?.replace('text-', 'border-l-') || 'border-l-brand-green'}`}>
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <p className={`font-semibold text-sm ${badgeColors[blend.badge_color]?.split(' ')[1] || 'text-brand-green'}`}>
                       {blend.emoji} {blend.name}
@@ -106,6 +110,7 @@ export default function MixRatesView() {
   )
 }
 
+// Cost calculator (mirrors BlendsSection logic)
 const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, liter: 33.814 }
 function calcBlendCost(components = []) {
   let total = 0; let hasCost = false

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 
-/* ─── helpers ────────────────────────────────────── */
+/* ─── helpers ─────────────────────────────────────────── */
 function getStatus(p) {
   if (p.containers_in_stock <= 0) return 'out'
   if (p.containers_in_stock <= p.low_stock_threshold) return 'low'
@@ -54,7 +54,9 @@ function exportCSV(products) {
   URL.revokeObjectURL(url)
 }
 
+
 /* ─── Main View ───────────────────────────────────────── */
+
 export default function StockView() {
   const [products, setProducts] = useState([])
   const [search, setSearch] = useState('')
@@ -99,16 +101,21 @@ export default function StockView() {
     <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm">← Back</button>
-        <h1 className="text-white font-bold text-xl flex-1 text-center">📦 Stock Levels</h1>
-        <button
-          onClick={() => exportCSV(filtered)}
-          title="Export CSV"
-          className="text-white/40 hover:text-brand-green transition-colors text-xs flex items-center gap-1 font-medium"
-        >
-          ⬇ CSV
-        </button>
+      <div className="flex items-center mb-5">
+        <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">← Back</button>
+        <h1 className="text-white font-bold text-xl flex-[2] text-center whitespace-nowrap">📦 Stock Levels</h1>
+        <div className="flex-1 flex items-center justify-end gap-3">
+          <button
+            onClick={() => exportCSV(filtered)}
+            title="Export CSV"
+            className="text-white/40 hover:text-brand-green transition-colors text-lg"
+          >
+            ⬇
+          </button>
+          <button onClick={() => navigate('/hub')} className="text-white/40 hover:text-brand-green transition-colors text-lg" title="Hub">
+            🏠
+          </button>
+        </div>
       </div>
 
       {/* Total value pill */}
