@@ -10,7 +10,7 @@ export default function JobsSection() {
   // Create Job Modal
   const [isCreating, setIsCreating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [displayMode, setDisplayMode] = useState('calendar') // 'calendar' or 'list'
+  const [displayMode, setDisplayMode] = useState('list') // 'calendar' or 'list'
 
   // Edit Job State
   const [isEditingJob, setIsEditingJob] = useState(false)
@@ -398,12 +398,29 @@ export default function JobsSection() {
           />
         ) : (
           <section>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
               {upcomingJobs.length === 0 ? (
-                <div className="col-span-full p-8 bg-forest-900 border border-white/5 rounded-xl text-center text-white/40">No active jobs.</div>
-              ) : upcomingJobs.map(job => (
-                <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
-              ))}
+                <div className="p-8 text-center text-white/40">No active jobs.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-black/20">
+                        <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Job / Status</th>
+                        <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Customer / Property</th>
+                        <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Technician</th>
+                        <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider">Date</th>
+                        <th className="p-4 text-xs font-semibold text-white/40 uppercase tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {upcomingJobs.map(job => (
+                        <JobRow key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -413,11 +430,25 @@ export default function JobsSection() {
             <h2 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-4">
               Recently Completed
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-75">
-              {completedJobs.slice(0, 10).map(job => (
-                <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
-              ))}
-            </div>
+            {displayMode === 'list' ? (
+              <div className="bg-forest-900 border border-white/5 rounded-xl overflow-hidden shadow-lg opacity-75">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <tbody className="divide-y divide-white/5">
+                      {completedJobs.slice(0, 10).map(job => (
+                        <JobRow key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-75">
+                {completedJobs.slice(0, 10).map(job => (
+                  <JobCard key={job.id} job={job} onStatusChange={handleStatusChange} onEdit={openEditJob} onDelete={handleDeleteJob} />
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>
@@ -552,5 +583,64 @@ function JobCard({ job, onStatusChange, onEdit, onDelete }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function JobRow({ job, onStatusChange, onEdit, onDelete }) {
+  const isCompleted = job.status === 'completed'
+  const isInProgress = job.status === 'in_progress'
+  const isCancelled = job.status === 'cancelled'
+
+  return (
+    <tr className={`hover:bg-white/[0.02] transition-colors group ${isCancelled ? 'opacity-50' : ''}`}>
+      <td className="p-4 align-middle">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-white font-medium text-sm">{job.service_type}</span>
+        </div>
+        <select
+          value={job.status}
+          onChange={(e) => onStatusChange(job.id, e.target.value)}
+          className={`text-xs font-semibold px-2 py-0.5 rounded outline-none appearance-none cursor-pointer ${
+            isCompleted ? 'bg-brand-green/20 text-brand-green' :
+            isInProgress ? 'bg-orange-500/20 text-orange-400' :
+            isCancelled ? 'bg-red-500/20 text-red-400' :
+            'bg-blue-500/20 text-blue-400'
+          }`}
+        >
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </td>
+      <td className="p-4 align-middle">
+        <div className="text-white/80 font-medium text-sm flex items-center gap-1.5 mb-1">
+          <User size={12} className="text-white/30 shrink-0" />
+          {job.crm_customers?.first_name} {job.crm_customers?.last_name}
+          {job.crm_customers?.company_name && <span className="text-white/40 text-xs font-normal">({job.crm_customers.company_name})</span>}
+        </div>
+        <div className="text-white/50 text-xs flex items-center gap-1.5">
+          <MapPin size={12} className="text-white/30 shrink-0" />
+          {job.crm_properties?.nickname || job.crm_properties?.address_line1}
+        </div>
+      </td>
+      <td className="p-4 align-middle text-sm text-white/70">
+        {job.technicians ? `${job.technicians.first_name} ${job.technicians.last_initial}.` : <span className="text-white/30">Unassigned</span>}
+      </td>
+      <td className="p-4 align-middle text-sm text-white/70">
+        {job.scheduled_date ? new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString() : <span className="text-white/30">TBD</span>}
+        {job.start_time && <div className="text-white/35 text-xs mt-0.5">{job.start_time}{job.end_time && ` – ${job.end_time}`}</div>}
+      </td>
+      <td className="p-4 align-middle text-right">
+        <div className="flex justify-end items-center gap-2">
+          <button onClick={() => onEdit(job)} className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Edit Job">
+            <Edit size={16} />
+          </button>
+          <button onClick={() => onDelete(job.id)} className="p-1.5 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete Job">
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
   )
 }
