@@ -44,6 +44,7 @@ export default function LoggingFlow() {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [submitError, setSubmitError] = useState(null)
+  const [completeJobPrompt, setCompleteJobPrompt] = useState(null) // jobId to prompt completion for
 
   useEffect(() => {
     async function load() {
@@ -188,14 +189,25 @@ export default function LoggingFlow() {
           }
         }
       }
-      setSuccess(true)
-      setTimeout(() => navigate('/'), 1500)
+      if (selectedJobId) {
+        setCompleteJobPrompt(selectedJobId)
+      } else {
+        setSuccess(true)
+        setTimeout(() => navigate('/'), 1500)
+      }
     } catch (err) {
       console.error('Log submit failed:', err)
       setSubmitError(err?.message || 'Something went wrong submitting your log. Please try again.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function handleCompleteJob() {
+    if (completeJobPrompt) {
+      await supabase.from('crm_jobs').update({ status: 'completed' }).eq('id', completeJobPrompt)
+    }
+    navigate('/')
   }
 
   const canSubmit = logs.every(l => {
@@ -218,6 +230,32 @@ export default function LoggingFlow() {
           >
             ← Back to Hub
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (completeJobPrompt) {
+    return (
+      <div className="min-h-screen bg-forest-950 flex items-center justify-center px-4">
+        <div className="glass rounded-2xl p-8 max-w-sm w-full text-center">
+          <div className="text-5xl mb-4">✅</div>
+          <p className="text-white font-bold text-xl mb-1">Log submitted!</p>
+          <p className="text-white/50 text-sm mb-6">Is this job finished for today?</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleCompleteJob}
+              className="w-full py-3 rounded-xl bg-brand-green text-forest-950 font-bold text-sm transition-all hover:bg-brand-green/90"
+            >
+              ✓ Yes, Mark Job Complete
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 font-medium text-sm transition-all"
+            >
+              Not Yet — Return to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     )
