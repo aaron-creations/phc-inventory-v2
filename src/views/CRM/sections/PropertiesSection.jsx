@@ -178,12 +178,16 @@ export default function PropertiesSection() {
               <input required placeholder="Address Line 1" value={editPropertyForm.address_line1 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line1: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
               <input placeholder="Address Line 2 (Apt, Suite, etc.)" value={editPropertyForm.address_line2 || ''} onChange={e => setEditPropertyForm({...editPropertyForm, address_line2: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <input placeholder="City" value={editPropertyForm.city || ''} onChange={e => setEditPropertyForm({...editPropertyForm, city: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
-                <input placeholder="Nickname (e.g. Main House)" value={editPropertyForm.nickname || ''} onChange={e => setEditPropertyForm({...editPropertyForm, nickname: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+                <input placeholder="State" maxLength={2} value={editPropertyForm.state || ''} onChange={e => setEditPropertyForm({...editPropertyForm, state: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white uppercase" />
+                <input placeholder="ZIP" value={editPropertyForm.zip || ''} onChange={e => setEditPropertyForm({...editPropertyForm, zip: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
               </div>
               
+              <input placeholder="Nickname (e.g. Main House)" value={editPropertyForm.nickname || ''} onChange={e => setEditPropertyForm({...editPropertyForm, nickname: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+              
               <textarea placeholder="Gate codes, dogs, access notes..." value={editPropertyForm.access_notes || ''} onChange={e => setEditPropertyForm({...editPropertyForm, access_notes: e.target.value})} rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white" />
+
               
               <div className="flex gap-3 justify-end mt-8 border-t border-white/10 pt-4">
                 <button type="button" onClick={() => setIsEditingProperty(false)} className="px-4 py-2 text-white/50 hover:text-white transition-colors text-sm font-medium">Cancel</button>
