@@ -1,48 +1,59 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient'
-import { format } from 'date-fns'
-import LowStockBanner from '../../../components/LowStockBanner'
-
-import { MapPin, User, Clock } from 'lucide-react'
+import { format, startOfWeek } from 'date-fns'
+import { AlertTriangle, CheckCircle2, Clock, Users, TrendingUp, Calendar, PackageX, Zap } from 'lucide-react'
 
 export default function ManagerDashboard() {
-  const [stats, setStats] = useState({ products: 0, blends: 0, inventoryValue: 0, usageCost: 0 })
+  const [kpis, setKpis] = useState({ lowStockCount: 0, todayJobs: 0, weekCost: 0, weekCompleted: 0 })
+  const [attention, setAttention] = useState({ lowStock: [], stuckJobs: [], pendingUsers: 0 })
   const [activity, setActivity] = useState([])
-  const [allProducts, setAllProducts] = useState([])
-  const [activeJobs, setActiveJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
-      const [prodRes, blendRes, txRes, jobsRes] = await Promise.all([
-        supabase.from('products').select('id, name, containers_in_stock, cost_per_container, low_stock_threshold'),
-        supabase.from('blends').select('id', { count: 'exact' }),
-        supabase.from('transactions').select('*, products(name), blends(name), technicians(first_name, last_initial)').order('date', { ascending: false }).limit(20),
-        supabase.from('crm_jobs').select('*, crm_customers(first_name, last_name), crm_properties(nickname, address_line1), technicians(first_name, last_initial)').eq('status', 'in_progress')
+      const today = format(new Date(), 'yyyy-MM-dd')
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+
+      const [prodRes, todayJobsRes, weekTxRes, weekCompletedRes, stuckRes, pendingRes, activityRes] = await Promise.all([
+        supabase.from('products').select('id, name, containers_in_stock, low_stock_threshold'),
+        supabase.from('crm_jobs').select('id', { count: 'exact' })
+          .eq('scheduled_date', today).neq('status', 'cancelled'),
+        supabase.from('transactions').select('estimated_cost').gte('date', weekStart),
+        supabase.from('crm_jobs').select('id', { count: 'exact' })
+          .eq('status', 'completed').gte('scheduled_date', weekStart),
+        supabase.from('crm_jobs')
+          .select('id, service_type, scheduled_date, crm_customers(first_name, last_name), technicians(first_name, last_initial)')
+          .eq('status', 'in_progress').lt('scheduled_date', today),
+        supabase.from('user_profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
+        supabase.from('transactions')
+          .select('*, products(name), blends(name), technicians(first_name, last_initial)')
+          .order('date', { ascending: false }).limit(5),
       ])
 
       const products = prodRes.data || []
-      const inventoryValue = products.reduce((sum, p) =>
-        sum + (p.containers_in_stock * (p.cost_per_container || 0)), 0)
+      const lowStock = products.filter(p => p.containers_in_stock <= p.low_stock_threshold)
+      const weekCost = (weekTxRes.data || []).reduce((s, t) => s + (t.estimated_cost || 0), 0)
 
-      const transactions = txRes.data || []
-      const usageCost = transactions.reduce((sum, t) => sum + (t.estimated_cost || 0), 0)
-
-      setStats({
-        products: products.length,
-        blends: blendRes.count || 0,
-        inventoryValue,
-        usageCost,
+      setKpis({
+        lowStockCount: lowStock.length,
+        todayJobs: todayJobsRes.count || 0,
+        weekCost,
+        weekCompleted: weekCompletedRes.count || 0,
       })
-      setAllProducts(products)
-      setActivity(transactions)
-      setActiveJobs(jobsRes.data || [])
+      setAttention({
+        lowStock: lowStock.slice(0, 5),
+        stuckJobs: stuckRes.data || [],
+        pendingUsers: pendingRes.count || 0,
+      })
+      setActivity(activityRes.data || [])
       setLoading(false)
     }
     load()
   }, [])
+
+  const hasAttentionItems = attention.lowStock.length > 0 || attention.stuckJobs.length > 0 || attention.pendingUsers > 0
 
   function getTypeBadge(type) {
     const map = {
@@ -56,103 +67,171 @@ export default function ManagerDashboard() {
   function txLabel(tx) {
     const name = tx.type === 'BLEND' ? tx.blends?.name : tx.products?.name
     const tech = tx.technicians ? `${tx.technicians.first_name} ${tx.technicians.last_initial}.` : ''
-    const amount = tx.type === 'RESTOCK'
-      ? `+${tx.amount} containers`
-      : `${tx.amount} ${tx.unit}`
+    const amount = tx.type === 'RESTOCK' ? `+${tx.amount} containers` : `${tx.amount} ${tx.unit}`
     return { name, tech, amount }
   }
 
   return (
     <div className="p-6 max-w-4xl">
-      <h2 className="text-white font-bold text-xl mb-4">Dashboard</h2>
-
-      {/* Low-Stock Alert Banner */}
-      {!loading && <LowStockBanner products={allProducts} linkTo="/stock" />}
+      <h2 className="text-white font-bold text-xl mb-6">Dashboard</h2>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Total Products', value: stats.products,                           color: 'text-white' },
-          { label: 'Active Blends',  value: stats.blends,                              color: 'text-white' },
-          { label: 'Inventory Value',value: `$${stats.inventoryValue.toFixed(2)}`,     color: 'text-brand-green' },
-          { label: 'Usage Cost',     value: `$${stats.usageCost.toFixed(2)}`,          color: 'text-brand-orange' },
-        ].map(kpi => (
-          <div key={kpi.label} className="glass rounded-xl p-4">
-            <p className="text-white/40 text-xs mb-1">{kpi.label}</p>
-            <p className={`text-2xl font-bold ${kpi.color}`}>
-              {loading ? <span className="inline-block w-16 h-6 bg-white/10 rounded animate-pulse" /> : kpi.value}
-            </p>
+        <div
+          onClick={() => navigate('/stock')}
+          className={`glass rounded-xl p-4 cursor-pointer hover:bg-white/[0.07] transition-all group ${!loading && kpis.lowStockCount > 0 ? 'border border-red-500/20 bg-red-500/5' : ''}`}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <PackageX size={14} className={kpis.lowStockCount > 0 ? 'text-red-400' : 'text-white/20'} />
+            <p className="text-white/40 text-xs">Low / Out of Stock</p>
           </div>
-        ))}
+          <p className={`text-2xl font-bold ${kpis.lowStockCount > 0 ? 'text-red-400' : 'text-white/30'}`}>
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.lowStockCount}
+          </p>
+          <p className="text-white/25 text-[10px] mt-1 group-hover:text-white/40 transition-colors">
+            {kpis.lowStockCount > 0 ? 'Tap to view →' : 'All stocked up'}
+          </p>
+        </div>
+
+        <div className="glass rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar size={14} className="text-blue-400" />
+            <p className="text-white/40 text-xs">Jobs Today</p>
+          </div>
+          <p className="text-2xl font-bold text-blue-400">
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.todayJobs}
+          </p>
+          <p className="text-white/25 text-[10px] mt-1">{format(new Date(), 'EEEE, MMM d')}</p>
+        </div>
+
+        <div className="glass rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp size={14} className="text-brand-orange" />
+            <p className="text-white/40 text-xs">Cost This Week</p>
+          </div>
+          <p className="text-2xl font-bold text-brand-orange">
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : `$${kpis.weekCost.toFixed(0)}`}
+          </p>
+          <p className="text-white/25 text-[10px] mt-1">Mon – today</p>
+        </div>
+
+        <div className="glass rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 size={14} className="text-brand-green" />
+            <p className="text-white/40 text-xs">Completed This Week</p>
+          </div>
+          <p className="text-2xl font-bold text-brand-green">
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.weekCompleted}
+          </p>
+          <p className="text-white/25 text-[10px] mt-1">jobs finished</p>
+        </div>
       </div>
 
-      {/* Active Jobs Section */}
-      {(!loading && activeJobs.length > 0) && (
-        <div className="mb-8">
-          <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3 flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-            </span>
-            Active Jobs ({activeJobs.length})
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeJobs.map(job => (
-              <div key={job.id} className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-white font-bold">{job.service_type}</h4>
-                  <div className="bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">In Progress</div>
+      {/* Needs Attention */}
+      <div className="mb-8">
+        <h3 className="text-white/50 text-xs font-semibold tracking-widest uppercase mb-3 flex items-center gap-2">
+          <Zap size={12} />
+          Needs Attention
+        </h3>
+
+        {loading ? (
+          <div className="glass rounded-xl p-4 animate-pulse h-20" />
+        ) : !hasAttentionItems ? (
+          <div className="glass rounded-xl p-4 flex items-center gap-3 border border-brand-green/20 bg-brand-green/5">
+            <CheckCircle2 size={20} className="text-brand-green flex-shrink-0" />
+            <div>
+              <p className="text-brand-green font-semibold text-sm">All clear</p>
+              <p className="text-white/30 text-xs mt-0.5">No low stock, stuck jobs, or pending approvals.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {attention.lowStock.length > 0 && (
+              <div
+                onClick={() => navigate('/stock')}
+                className="glass rounded-xl p-4 flex items-start gap-3 border border-red-500/20 bg-red-500/[0.04] cursor-pointer hover:bg-red-500/[0.08] transition-all group"
+              >
+                <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-red-400 font-semibold text-sm">
+                    {attention.lowStock.length} product{attention.lowStock.length !== 1 ? 's' : ''} low or out of stock
+                  </p>
+                  <p className="text-white/35 text-xs mt-0.5 truncate">
+                    {attention.lowStock.map(p => p.name).join(' · ')}
+                  </p>
                 </div>
-                
-                <div className="space-y-1.5 mb-3">
-                  {job.crm_customers && (
-                    <div className="flex items-center gap-2 text-white/70 text-sm">
-                      <User size={14} className="text-white/30" />
-                      {job.crm_customers.first_name} {job.crm_customers.last_name}
-                    </div>
-                  )}
-                  {job.crm_properties && (
-                    <div className="flex items-center gap-2 text-white/70 text-sm">
-                      <MapPin size={14} className="text-white/30" />
-                      {job.crm_properties.nickname || job.crm_properties.address_line1}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-2 pt-3 border-t border-orange-500/20 text-sm">
-                  <Clock size={14} className="text-orange-400" />
-                  <span className="text-white/50">Tech:</span>
-                  <span className="text-white font-medium">{job.technicians ? `${job.technicians.first_name} ${job.technicians.last_initial}.` : 'Unknown'}</span>
+                <span className="text-red-400/50 group-hover:text-red-400 transition-colors text-sm flex-shrink-0">→</span>
+              </div>
+            )}
+
+            {attention.stuckJobs.length > 0 && (
+              <div className="glass rounded-xl p-4 flex items-start gap-3 border border-brand-orange/20 bg-brand-orange/[0.04]">
+                <Clock size={16} className="text-brand-orange flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-brand-orange font-semibold text-sm">
+                    {attention.stuckJobs.length} job{attention.stuckJobs.length !== 1 ? 's' : ''} still marked In Progress from a previous day
+                  </p>
+                  {attention.stuckJobs.slice(0, 2).map(j => (
+                    <p key={j.id} className="text-white/35 text-xs mt-0.5">
+                      {j.service_type} · {j.crm_customers ? `${j.crm_customers.first_name} ${j.crm_customers.last_name}` : 'Unknown'} · {format(new Date(j.scheduled_date + 'T12:00:00'), 'MMM d')}
+                    </p>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {attention.pendingUsers > 0 && (
+              <div
+                onClick={() => navigate('/manager/users')}
+                className="glass rounded-xl p-4 flex items-start gap-3 border border-blue-500/20 bg-blue-500/[0.04] cursor-pointer hover:bg-blue-500/[0.08] transition-all group"
+              >
+                <Users size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-blue-400 font-semibold text-sm">
+                    {attention.pendingUsers} user{attention.pendingUsers !== 1 ? 's' : ''} awaiting approval
+                  </p>
+                  <p className="text-white/35 text-xs mt-0.5">Approve or reject in Users →</p>
+                </div>
+                <span className="text-blue-400/50 group-hover:text-blue-400 transition-colors text-sm flex-shrink-0">→</span>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Quick Actions */}
       <div className="flex gap-3 mb-8">
-        <button
-          onClick={() => navigate('/restock')}
-          className="px-4 py-2 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green text-sm transition-all"
-        >
-          + Log Restock
-        </button>
         <button
           onClick={() => navigate('/manager/inventory')}
           className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all"
         >
           📦 Manage Inventory
         </button>
+        <button
+          onClick={() => navigate('/manager/analytics')}
+          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-sm transition-all"
+        >
+          📊 Analytics
+        </button>
       </div>
 
-      {/* Recent Activity */}
-      <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase mb-3">Recent Activity</h3>
+      {/* Recent Activity (last 5) */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-white/50 text-xs font-semibold tracking-widest uppercase">Recent Activity</h3>
+        <button
+          onClick={() => navigate('/manager/history')}
+          className="text-xs text-white/30 hover:text-brand-green transition-colors"
+        >
+          View all →
+        </button>
+      </div>
       <div className="glass rounded-xl overflow-hidden">
         {loading ? (
-          Array.from({ length: 5 }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-14 border-b border-white/5 animate-pulse bg-white/2" />
           ))
+        ) : activity.length === 0 ? (
+          <p className="text-white/25 text-sm text-center py-8">No recent transactions.</p>
         ) : activity.map((tx, i) => {
           const { name, tech, amount } = txLabel(tx)
           return (
@@ -160,7 +239,7 @@ export default function ManagerDashboard() {
               <span className={`text-xs px-2 py-0.5 rounded border flex-shrink-0 ${getTypeBadge(tx.type)}`}>{tx.type}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm truncate">{name}</p>
-                <p className="text-white/30 text-xs">{format(new Date(tx.date), 'MMM d, yyyy')}{tech ? ` · ${tech}` : ''}</p>
+                <p className="text-white/30 text-xs">{format(new Date(tx.date + 'T12:00:00'), 'MMM d, yyyy')}{tech ? ` · ${tech}` : ''}</p>
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-white/60 text-xs">{amount}</p>
