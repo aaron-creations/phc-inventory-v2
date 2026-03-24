@@ -57,7 +57,14 @@ export function AuthProvider({ children }) {
   /* ── signOut ──────────────────────────────────────── */
   async function signOut() {
     clearAllTimers()
-    await supabase.auth.signOut()
+    // scope: 'global' revokes the refresh token server-side so it cannot
+    // be silently restored by onAuthStateChange after the redirect.
+    await supabase.auth.signOut({ scope: 'global' })
+    // Belt-and-suspenders: clear any persisted Supabase tokens from storage
+    // so there is no chance the auth listener re-emits a stale session.
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('sb-'))
+      .forEach(k => localStorage.removeItem(k))
     setSession(null)
     setProfile(null)
     setShowWarning(false)
