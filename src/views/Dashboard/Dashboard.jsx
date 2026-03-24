@@ -49,7 +49,11 @@ export default function Dashboard() {
       const [prodRes, jobsRes] = await Promise.all([
         supabase.from('products').select('id, name, containers_in_stock, low_stock_threshold').order('name'),
         tech?.id ? supabase.from('crm_jobs')
-          .select('id, service_type, status, start_time, end_time, crm_properties(address_line1, nickname), crm_customers(first_name, last_name)')
+          .select(`
+            id, service_type, status, start_time, end_time,
+            crm_properties(address_line1, address_line2, nickname, city, state, zip),
+            crm_customers(first_name, last_name, phone_mobile, phone_home)
+          `)
           .eq('technician_id', tech.id)
           .eq('scheduled_date', todayString)
           .neq('status', 'cancelled')
@@ -88,6 +92,34 @@ export default function Dashboard() {
     return `${hr}:${String(m).padStart(2, '0')} ${ampm}`
   }
 
+  // Build a full address string for map linking
+  function buildAddress(prop) {
+    if (!prop) return null
+    const parts = [prop.address_line1, prop.address_line2, prop.city, prop.state, prop.zip]
+    return parts.filter(Boolean).join(', ')
+  }
+
+  // Opens Apple Maps on iOS/macOS, Google Maps on Android/web
+  function openMaps(address) {
+    const encoded = encodeURIComponent(address)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const isMac = /Mac/.test(navigator.userAgent) && !('ontouchend' in document)
+    if (isIOS || isMac) {
+      window.open(`maps://?daddr=${encoded}`, '_blank')
+    } else {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank')
+    }
+  }
+
+  // Best available phone number
+  function bestPhone(customer) {
+    return customer?.phone_mobile || customer?.phone_home || null
+  }
+
+  const scheduledJobs = todaysJobs.filter(j => j.status === 'scheduled')
+  const activeJobs    = todaysJobs.filter(j => j.status === 'in_progress')
+  const completedJobs = todaysJobs.filter(j => j.status === 'completed')
+
   return (
     <div className="min-h-screen bg-forest-950 flex flex-col items-center px-4 py-10 max-w-lg mx-auto">
 
@@ -117,6 +149,7 @@ export default function Dashboard() {
             {isManager ? 'Manager' : 'Technician'} · {format(new Date(), 'EEEE, MMMM d')}
           </span>
         </div>
+        {/* Job count badge */}
         {!loading && !isManager && (
           <div className={`flex-shrink-0 text-center px-3 py-1 rounded-full text-xs font-bold ${
             todaysJobs.length > 0
@@ -128,7 +161,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Low Stock Alert */}
+      {/* ── Low Stock Alert (subtle banner) ───────────────────────── */}
       {!loading && lowStockCount > 0 && (
         <button
           onClick={() => navigate('/stock')}
@@ -142,7 +175,7 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* Today's Route — Hero Section */}
+      {/* ── Today's Route — Hero Section ──────────────────────────── */}
       {!isManager && (
         <div className="w-full mb-6">
           <div className="flex items-center gap-2 mb-3">
@@ -156,7 +189,7 @@ export default function Dashboard() {
 
           {loading ? (
             <div className="flex flex-col gap-3">
-              {[1, 2].map(i => <div key={i} className="h-28 glass rounded-xl animate-pulse" />)}
+              {[1, 2].map(i => <div key={i} className="h-36 glass rounded-xl animate-pulse" />)}
             </div>
           ) : todaysJobs.length === 0 ? (
             <div className="glass rounded-xl p-6 text-center border border-white/5">
@@ -170,6 +203,13 @@ export default function Dashboard() {
                 const startFmt = formatTime(job.start_time)
                 const endFmt = formatTime(job.end_time)
                 const hasTime = startFmt && endFmt
+                const customer = job.crm_customers
+                const prop = job.crm_properties
+                const fullAddress = buildAddress(prop)
+                const phone = bestPhone(customer)
+                const customerName = customer
+                  ? `${customer.first_name} ${customer.last_name || ''}`.trim()
+                  : null
 
                 return (
                   <div key={job.id} className={`glass rounded-xl p-4 border flex flex-col gap-3 transition-all ${
@@ -177,17 +217,12 @@ export default function Dashboard() {
                     job.status === 'in_progress' ? 'border-brand-orange/25 bg-brand-orange/[0.04]' :
                     'border-white/5'
                   }`}>
+                    {/* Job header */}
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-white font-bold leading-snug">{job.service_type}</h3>
-                        <p className="text-white/40 text-xs mt-0.5">
-                          {job.crm_customers ? `${job.crm_customers.first_name} ${job.crm_customers.last_name}` : ''}
-                          {job.crm_properties
-                            ? ` · ${job.crm_properties.nickname || job.crm_properties.address_line1}`
-                            : ''}
-                        </p>
                         {hasTime && (
-                          <p className="text-white/35 text-xs mt-1 font-mono">{startFmt} – {endFmt}</p>
+                          <p className="text-white/35 text-xs mt-0.5 font-mono">{startFmt} – {endFmt}</p>
                         )}
                       </div>
                       {job.status === 'completed' && (
@@ -201,6 +236,62 @@ export default function Dashboard() {
                       )}
                     </div>
 
+                    {/* Customer name + phone */}
+                    {(customerName || phone) && (
+                      <div className="flex items-center justify-between gap-2">
+                        {customerName && (
+                          <span className="text-white/70 text-sm font-medium">{customerName}</span>
+                        )}
+                        {phone && (
+                          <a
+                            href={`tel:${phone.replace(/\D/g, '')}`}
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-mono transition-colors flex-shrink-0"
+                          >
+                            📞 {phone}
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Address — tappable to maps for scheduled + in_progress jobs */}
+                    {fullAddress && (
+                      <div>
+                        {job.status !== 'completed' ? (
+                          <button
+                            onClick={() => openMaps(fullAddress)}
+                            className={`text-left text-xs leading-snug transition-colors flex items-start gap-1.5 group w-full ${
+                              job.status === 'in_progress'
+                                ? 'text-brand-green hover:text-brand-green/80'
+                                : 'text-white/40 hover:text-white/70'
+                            }`}
+                          >
+                            <span className="mt-0.5 flex-shrink-0">📍</span>
+                            <span className="group-hover:underline underline-offset-2">
+                              {prop?.nickname ? `${prop.nickname} · ` : ''}
+                              {prop?.address_line1}
+                              {prop?.city ? `, ${prop.city}` : ''}
+                              {prop?.state ? ` ${prop.state}` : ''}
+                              {prop?.zip ? ` ${prop.zip}` : ''}
+                            </span>
+                            <span className="flex-shrink-0 text-[10px] opacity-50 mt-0.5 ml-0.5">↗</span>
+                          </button>
+                        ) : (
+                          <p className="text-white/25 text-xs leading-snug flex items-start gap-1.5">
+                            <span className="mt-0.5 flex-shrink-0">📍</span>
+                            <span>
+                              {prop?.nickname ? `${prop.nickname} · ` : ''}
+                              {prop?.address_line1}
+                              {prop?.city ? `, ${prop.city}` : ''}
+                              {prop?.state ? ` ${prop.state}` : ''}
+                              {prop?.zip ? ` ${prop.zip}` : ''}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Actions */}
                     {job.status === 'scheduled' && (
                       <button
                         onClick={() => startJob(job.id)}
@@ -233,7 +324,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Navigation */}
+      {/* ── Manager Restock quick-action removed — now lives in /stock ── */}
+
+      {/* ── Navigation: Priority-ordered quick actions ─────────────── */}
       <div className="w-full grid grid-cols-2 gap-3 max-w-sm mx-auto">
         <NavButton icon="🧪" label="Log Usage" to="/log" color="bg-brand-green/10 border border-brand-green/30 text-brand-green" />
         <NavButton icon="📋" label="Mix Rates" to="/mix-rates" />
