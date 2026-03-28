@@ -1,10 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
-import { useAuth } from '../../contexts/AuthContext'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, liter: 33.814 }
+// --- Unit conversion helpers ---
+const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, 'fl oz': 1, liter: 33.814 }
+
+function formatFlOz(oz) {
+  if (oz >= 128) return `${(oz / 128).toFixed(2)} gal`
+  if (oz >= 32)  return `${(oz / 32).toFixed(2)} qt`
+  if (oz >= 16)  return `${(oz / 16).toFixed(2)} pint`
+  return `${oz.toFixed(1)} fl oz`
+}
 
 function calcBlendCost(components = []) {
   let total = 0; let hasCost = false
@@ -18,13 +24,6 @@ function calcBlendCost(components = []) {
   return hasCost ? total : null
 }
 
-function formatFlOz(oz) {
-  if (oz >= 128) return `${(oz / 128).toFixed(2)} gal`
-  if (oz >= 32)  return `${(oz / 32).toFixed(2)} qt`
-  if (oz >= 16)  return `${(oz / 16).toFixed(2)} pint`
-  return `${oz.toFixed(1)} fl oz`
-}
-
 function SectionHeader({ icon, title }) {
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -35,8 +34,55 @@ function SectionHeader({ icon, title }) {
   )
 }
 
-// ─── Calculator Tab ───────────────────────────────────────────────────────────
-function CalculatorTab({ blends, products }) {
+function ResultRow({ label, value, highlight }) {
+  return (
+    <div className={`flex justify-between items-center px-4 py-3 ${highlight ? 'bg-blue-500/[0.04]' : ''}`}>
+      <span className={`text-sm ${highlight ? 'text-blue-300/80' : 'text-white/80'}`}>{label}</span>
+      <span className={`font-bold font-mono text-sm ${highlight ? 'text-blue-400' : 'text-brand-green'}`}>{value}</span>
+    </div>
+  )
+}
+
+function ResultBox({ children }) {
+  return (
+    <div className="rounded-xl bg-white/[0.04] border border-white/8 overflow-hidden divide-y divide-white/5 mt-4">
+      {children}
+    </div>
+  )
+}
+
+function EmptyResult({ text = 'Fill in the fields above to see results' }) {
+  return (
+    <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center mt-4">
+      <p className="text-white/20 text-sm">{text}</p>
+    </div>
+  )
+}
+
+function NumberInput({ label, value, onChange, placeholder, unit }) {
+  return (
+    <div>
+      <label className="text-white/50 text-xs font-medium mb-1.5 block">{label}</label>
+      <div className="relative">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm outline-none focus:border-brand-green/50 transition-colors"
+        />
+        {unit && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">{unit}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// --- Blend Calculator ---
+function BlendCalc({ blends }) {
   const [selectedBlend, setSelectedBlend] = useState(null)
   const [gallons, setGallons] = useState('')
 
@@ -49,138 +95,267 @@ function CalculatorTab({ blends, products }) {
   const results = useMemo(() => {
     if (!blend || !gallons || isNaN(Number(gallons)) || Number(gallons) <= 0) return null
     const g = Number(gallons)
-    const components = blend.blend_components || []
-    const items = components.map(bc => {
-      const flOzNeeded = (bc.rate_fl_oz_per_100_gal / 100) * g
-      return {
-        name: bc.products?.name || 'Unknown product',
-        flOz: flOzNeeded,
-      }
-    })
+    const items = (blend.blend_components || []).map(bc => ({
+      name: bc.products?.name || 'Unknown product',
+      flOz: (bc.rate_fl_oz_per_100_gal / 100) * g,
+    }))
     const totalProductFlOz = items.reduce((sum, i) => sum + i.flOz, 0)
     const waterFlOz = Math.max(0, g * 128 - totalProductFlOz)
     return { items, waterFlOz, totalGal: g }
   }, [blend, gallons])
 
-  const directProducts = products.filter(p => p.unit_type === 'direct')
-  const mixedProducts  = products.filter(p => p.unit_type === 'mixed')
-  const allNonBlend    = [...mixedProducts, ...directProducts]
-
   return (
-    <div className="flex flex-col gap-6">
+    <div className="glass rounded-xl p-5">
+      <SectionHeader icon="🧬" title="Blend Mix Calculator" />
+      <p className="text-white/35 text-xs mb-4 -mt-1">
+        Select a blend recipe and enter your total tank volume to get exact amounts per ingredient.
+      </p>
 
-      {/* Blend Calculator */}
-      <div className="glass rounded-xl p-5">
-        <SectionHeader icon="🧬" title="Blend Calculator" />
-        <p className="text-white/35 text-xs mb-4 -mt-1">
-          Select a blend and enter your tank/treatment volume to get exact amounts.
-        </p>
-
-        <div className="flex flex-col gap-3 mb-5">
-          <div>
-            <label className="text-white/50 text-xs font-medium mb-1.5 block">Select Blend</label>
-            <div className="flex flex-col gap-2">
-              {blends.map(b => (
-                <button
-                  key={b.id}
-                  onClick={() => setSelectedBlend(b.id)}
-                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium text-left transition-all border ${
-                    selectedBlend === b.id
-                      ? 'border-brand-green/40 bg-brand-green/10 text-brand-green'
-                      : 'border-white/8 bg-white/3 text-white/60 hover:border-white/15 hover:text-white/80'
-                  }`}
-                >
-                  <span className="text-base">{b.emoji}</span>
-                  <span className="flex-1">{b.name}</span>
-                  {selectedBlend === b.id && <span className="text-xs">✓</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-white/50 text-xs font-medium mb-1.5 block">Treatment Volume (gallons)</label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder="e.g. 100"
-              value={gallons}
-              onChange={e => setGallons(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm outline-none focus:border-brand-green/50 transition-colors"
-            />
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="text-white/50 text-xs font-medium mb-1.5 block">Select Blend</label>
+          <div className="flex flex-col gap-2">
+            {blends.map(b => (
+              <button
+                key={b.id}
+                onClick={() => setSelectedBlend(b.id)}
+                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium text-left transition-all border ${
+                  selectedBlend === b.id
+                    ? 'border-brand-green/40 bg-brand-green/10 text-brand-green'
+                    : 'border-white/8 bg-white/3 text-white/60 hover:border-white/15 hover:text-white/80'
+                }`}
+              >
+                <span className="text-base">{b.emoji}</span>
+                <span className="flex-1">{b.name}</span>
+                {selectedBlend === b.id && <span className="text-xs">✓</span>}
+              </button>
+            ))}
           </div>
         </div>
 
-        {results ? (
-          <div className="rounded-xl bg-white/[0.04] border border-white/8 overflow-hidden">
-            <div className="px-4 py-2 bg-white/[0.04] border-b border-white/8">
-              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">
-                Results for {results.totalGal} gallon{results.totalGal !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <div className="divide-y divide-white/5">
-              {results.items.map((item, i) => (
-                <div key={i} className="flex justify-between items-center px-4 py-3">
-                  <span className="text-white/80 text-sm">{item.name}</span>
-                  <span className="text-brand-green font-bold font-mono text-sm">{formatFlOz(item.flOz)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between items-center px-4 py-3 bg-blue-500/[0.04]">
-                <span className="text-blue-300/80 text-sm">Water to fill</span>
-                <span className="text-blue-400 font-bold font-mono text-sm">{formatFlOz(results.waterFlOz)}</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center">
-            <p className="text-white/20 text-sm">Enter a volume above to see required amounts</p>
-          </div>
-        )}
+        <NumberInput
+          label="Treatment Volume (gallons)"
+          value={gallons}
+          onChange={setGallons}
+          placeholder="e.g. 100"
+          unit="gal"
+        />
       </div>
 
-      {/* Individual Product Calculator — Coming Soon */}
-      <div className="glass rounded-xl p-5 border border-yellow-500/10">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-base">🧪</span>
-          <h2 className="text-white/60 text-xs font-semibold tracking-widest uppercase">Individual Product Calculator</h2>
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 font-semibold uppercase tracking-wide flex-shrink-0">In Progress</span>
-        </div>
-
-        <p className="text-white/35 text-xs mb-4">
-          Formulas for individual products are being compiled from SDS sheets. Once Kenneth provides the product data sheets, exact calculator amounts will be available here for each product.
-        </p>
-
-        <div className="flex flex-col gap-2">
-          {allNonBlend.map(p => (
-            <div key={p.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/6 opacity-60">
-              <div>
-                <p className="text-white/60 text-sm">{p.name}</p>
-                {p.mix_rate && <p className="text-white/30 text-xs mt-0.5 font-mono">{p.mix_rate}</p>}
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500/70 border border-yellow-500/15 font-semibold">
-                Coming Soon
-              </span>
-            </div>
+      {results ? (
+        <ResultBox>
+          <div className="px-4 py-2 bg-white/[0.04] border-b border-white/8">
+            <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">
+              Results for {results.totalGal} gallon{results.totalGal !== 1 ? 's' : ''}
+            </p>
+          </div>
+          {results.items.map((item, i) => (
+            <ResultRow key={i} label={item.name} value={formatFlOz(item.flOz)} />
           ))}
-        </div>
-      </div>
-
+          <ResultRow label="Water to fill" value={formatFlOz(results.waterFlOz)} highlight />
+        </ResultBox>
+      ) : <EmptyResult />}
     </div>
   )
 }
 
-// ─── Reference Tab ────────────────────────────────────────────────────────────
+// --- Shortstop / Cambistat DBH Calculator ---
+// Formula: mL product = DBH^2 / 12
+// Water = (DBH * volPerInch) - product mL
+function ShortstopCalc() {
+  const [dbh, setDbh] = useState('')
+  const [volPerInch, setVolPerInch] = useState('20')
+
+  const results = useMemo(() => {
+    const d = parseFloat(dbh)
+    const v = parseFloat(volPerInch)
+    if (!d || d <= 0 || !v || v <= 0) return null
+    const productMl = (d * d) / 12
+    const totalMl   = d * v
+    const waterMl   = Math.max(0, totalMl - productMl)
+    return { productMl, waterMl, totalMl }
+  }, [dbh, volPerInch])
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <SectionHeader icon="🌲" title="Shortstop / Cambistat Calculator (DBH)" />
+      <p className="text-white/35 text-xs mb-4 -mt-1">
+        Direct-injection trunk treatment. Scales by DBH (diameter at breast height).
+        <span className="block mt-1 text-white/20">Formula: mL product = DBH² ÷ 12</span>
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <NumberInput label="DBH (inches)" value={dbh} onChange={setDbh} placeholder="e.g. 12" unit="in" />
+        <NumberInput label="Volume/Inch (mL)" value={volPerInch} onChange={setVolPerInch} placeholder="20" unit="mL/in" />
+      </div>
+      {results ? (
+        <ResultBox>
+          <ResultRow label="Product (Shortstop / Cambistat)" value={`${results.productMl.toFixed(1)} mL`} />
+          <ResultRow label="Water" value={`${results.waterMl.toFixed(1)} mL`} highlight />
+          <ResultRow label="Total syringe volume" value={`${results.totalMl.toFixed(1)} mL`} />
+        </ResultBox>
+      ) : <EmptyResult />}
+    </div>
+  )
+}
+
+// --- PhosphoJet Calculator ---
+// Formula: sites = DBH/2, total = sites*20mL, product = total/2.85, water = total - product
+function PhosphoJetCalc() {
+  const [dbh, setDbh] = useState('')
+
+  const results = useMemo(() => {
+    const d = parseFloat(dbh)
+    if (!d || d <= 0) return null
+    const sites      = Math.round(d / 2)
+    const totalMl    = sites * 20
+    const productMl  = totalMl / 2.85
+    const waterMl    = totalMl - productMl
+    return { sites, totalMl, productMl, waterMl }
+  }, [dbh])
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <SectionHeader icon="🦫" title="PhosphoJet Calculator (DBH)" />
+      <p className="text-white/35 text-xs mb-4 -mt-1">
+        Trunk injection for phosphonate treatments. Cheat sheet: 3.5 mL/in DBH, diluted 1:2 with water.
+        <span className="block mt-1 text-white/20">Formula: sites = DBH ÷ 2 · total = sites × 20 mL · product = total ÷ 2.85</span>
+      </p>
+      <NumberInput label="DBH (inches)" value={dbh} onChange={setDbh} placeholder="e.g. 18" unit="in" />
+      {results ? (
+        <ResultBox>
+          <ResultRow label="Injection Sites" value={`${results.sites} sites`} />
+          <ResultRow label="Total Syringe Volume" value={`${results.totalMl.toFixed(0)} mL`} />
+          <ResultRow label="PhosphoJet" value={`${results.productMl.toFixed(1)} mL`} />
+          <ResultRow label="Water" value={`${results.waterMl.toFixed(1)} mL`} highlight />
+        </ResultBox>
+      ) : <EmptyResult />}
+    </div>
+  )
+}
+
+// --- Mn-Jet Calculator (Spring & Fall) ---
+// Formula: Circumference = DBH*3, sites = C/6
+//   Spring: DBH*5 mL (undiluted), Fall: DBH*12 mL (undiluted)
+function MnJetCalc() {
+  const [dbh, setDbh] = useState('')
+  const [season, setSeason] = useState('spring')
+
+  const results = useMemo(() => {
+    const d = parseFloat(dbh)
+    if (!d || d <= 0) return null
+    const circumference = d * 3
+    const sites = Math.round(circumference / 6)
+    const totalMl = season === 'spring' ? d * 5 : d * 12
+    return { circumference, sites, totalMl }
+  }, [dbh, season])
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <SectionHeader icon="🍂" title="Mn-Jet Calculator (DBH)" />
+      <p className="text-white/35 text-xs mb-4 -mt-1">
+        Manganese injection for chlorosis / nutrient deficiency. Seasonal doses differ.
+        <span className="block mt-1 text-white/20">Circumference = DBH × 3 · sites = C ÷ 6 · Spring: DBH × 5 mL · Fall: DBH × 12 mL</span>
+      </p>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <NumberInput label="DBH (inches)" value={dbh} onChange={setDbh} placeholder="e.g. 10" unit="in" />
+        <div>
+          <label className="text-white/50 text-xs font-medium mb-1.5 block">Season</label>
+          <div className="flex gap-1 p-1 glass rounded-xl">
+            {[['spring', '🌱 Spring'], ['fall', '🍂 Fall']].map(([s, label]) => (
+              <button
+                key={s}
+                onClick={() => setSeason(s)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  season === s
+                    ? 'bg-brand-green/20 text-brand-green border border-brand-green/30'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {results ? (
+        <ResultBox>
+          <ResultRow label="Circumference (est.)" value={`${results.circumference.toFixed(0)} in`} />
+          <ResultRow label="Injection Sites" value={`${results.sites} sites`} />
+          <ResultRow label="Mn-Jet (full concentration)" value={`${results.totalMl.toFixed(0)} mL`} />
+          <ResultRow label="Water" value="0 mL — inject undiluted" highlight />
+        </ResultBox>
+      ) : <EmptyResult />}
+    </div>
+  )
+}
+
+// --- Spray Mix Calculator (Mixed products / per-100-gal rate) ---
+function SprayMixCalc({ products }) {
+  const mixedProducts = products.filter(p => p.unit_type === 'mixed' && p.mix_rate)
+  const [selectedId, setSelectedId] = useState('')
+  const [gallons, setGallons] = useState('')
+
+  const product = mixedProducts.find(p => p.id === selectedId)
+
+  const parsedRate = useMemo(() => {
+    if (!product?.mix_rate) return null
+    const m = product.mix_rate.match(/^([\d.]+)\s*(.+?)\/([\d.]+)\s*gal$/i)
+    if (!m) return null
+    return { amount: parseFloat(m[1]), unit: m[2].trim(), per: parseFloat(m[3]) }
+  }, [product])
+
+  const results = useMemo(() => {
+    if (!parsedRate || !gallons || isNaN(Number(gallons)) || Number(gallons) <= 0) return null
+    const g = Number(gallons)
+    const rateInFlOz = parsedRate.unit === 'fl oz' ? parsedRate.amount
+      : parsedRate.amount * (UNIT_TO_FL_OZ[parsedRate.unit] || 1)
+    const productFlOz = (g / parsedRate.per) * rateInFlOz
+    const waterFlOz = Math.max(0, g * 128 - productFlOz)
+    return { productFlOz, waterFlOz }
+  }, [parsedRate, gallons])
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <SectionHeader icon="💧" title="Spray Mix Calculator (Mixed Products)" />
+      <p className="text-white/35 text-xs mb-4 -mt-1">
+        For products mixed with water in a tank. Select a product and enter spray volume.
+      </p>
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="text-white/50 text-xs font-medium mb-1.5 block">Product</label>
+          <select
+            value={selectedId}
+            onChange={e => setSelectedId(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-brand-green/50 transition-colors appearance-none"
+          >
+            <option value="">Select a mixed product…</option>
+            {mixedProducts.map(p => (
+              <option key={p.id} value={p.id}>{p.name} ({p.mix_rate})</option>
+            ))}
+          </select>
+        </div>
+        {parsedRate && (
+          <div className="px-3 py-2 rounded-lg bg-brand-green/5 border border-brand-green/15 text-brand-green/70 text-xs font-mono">
+            Rate: {parsedRate.amount} {parsedRate.unit} per {parsedRate.per} gal
+          </div>
+        )}
+        <NumberInput label="Tank/Spray Volume (gallons)" value={gallons} onChange={setGallons} placeholder="e.g. 100" unit="gal" />
+      </div>
+      {results ? (
+        <ResultBox>
+          <ResultRow label={product.name} value={formatFlOz(results.productFlOz)} />
+          <ResultRow label="Water" value={formatFlOz(results.waterFlOz)} highlight />
+          <ResultRow label="Total tank volume" value={`${gallons} gal`} />
+        </ResultBox>
+      ) : <EmptyResult />}
+    </div>
+  )
+}
+
+// --- Reference Tab ---
 function ReferenceTab({ blends, products }) {
   const mixedProducts  = products.filter(p => p.unit_type === 'mixed')
   const directProducts = products.filter(p => p.unit_type === 'direct')
-
-  const badgeColors = {
-    green:  'border-brand-green/40 text-brand-green',
-    orange: 'border-brand-orange/40 text-brand-orange',
-    blue:   'border-brand-blue/40 text-brand-blue',
-  }
 
   return (
     <>
@@ -189,9 +364,9 @@ function ReferenceTab({ blends, products }) {
         {blends.map(blend => {
           const blendCost = calcBlendCost(blend.blend_components)
           return (
-            <div key={blend.id} className={`glass rounded-xl p-4 border-l-2 ${badgeColors[blend.badge_color]?.replace('text-', 'border-l-') || 'border-l-brand-green'}`}>
+            <div key={blend.id} className="glass rounded-xl p-4">
               <div className="flex items-start justify-between gap-2 mb-3">
-                <p className={`font-semibold text-sm ${badgeColors[blend.badge_color]?.split(' ')[1] || 'text-brand-green'}`}>
+                <p className="text-brand-green font-semibold text-sm">
                   {blend.emoji} {blend.name}
                 </p>
                 {blendCost !== null && (
@@ -213,7 +388,7 @@ function ReferenceTab({ blends, products }) {
         })}
       </div>
 
-      <SectionHeader icon="🧪" title="Mixed Products" />
+      <SectionHeader icon="🧪" title="Mixed Products (spray tank)" />
       <div className="glass rounded-xl overflow-hidden mb-8">
         {mixedProducts.map((p, i) => (
           <div key={p.id} className={`flex justify-between items-center px-4 py-3 ${i < mixedProducts.length - 1 ? 'border-b border-white/5' : ''}`}>
@@ -223,8 +398,8 @@ function ReferenceTab({ blends, products }) {
         ))}
       </div>
 
-      <SectionHeader icon="💉" title="Direct Use" />
-      <div className="glass rounded-xl overflow-hidden">
+      <SectionHeader icon="💉" title="Direct Use (trunk injection)" />
+      <div className="glass rounded-xl overflow-hidden mb-8">
         {directProducts.map((p, i) => (
           <div key={p.id} className={`flex justify-between items-center px-4 py-3 ${i < directProducts.length - 1 ? 'border-b border-white/5' : ''}`}>
             <span className="text-white/80 text-xs flex-1 pr-2">{p.name}</span>
@@ -234,11 +409,82 @@ function ReferenceTab({ blends, products }) {
           </div>
         ))}
       </div>
+
+      <SectionHeader icon="📋" title="Application Cheat Sheet" />
+      <div className="flex flex-col gap-2">
+        {[
+          { name: 'PhosphoJet', rate: '3.5 mL / inch DBH', note: '1 part PhosphoJet : 2 parts water (diluted to 1:2.85 ratio)' },
+          { name: 'Mn-Jet',     rate: '5 mL / inch DBH (spring) · 12 mL (fall)', note: 'Inject undiluted at full concentration' },
+          { name: 'Shortstop',  rate: 'DBH² ÷ 12 mL of product', note: 'Balance with water to reach volume per inch target' },
+        ].map(item => (
+          <div key={item.name} className="glass rounded-xl px-4 py-3">
+            <div className="flex justify-between items-baseline mb-1">
+              <span className="text-white text-xs font-semibold">{item.name}</span>
+              <span className="text-brand-green text-xs font-mono">{item.rate}</span>
+            </div>
+            <span className="text-white/35 text-xs">{item.note}</span>
+          </div>
+        ))}
+      </div>
     </>
   )
 }
 
-// ─── Main View ────────────────────────────────────────────────────────────────
+// --- Calculator Tab ---
+function CalculatorTab({ blends, products }) {
+  const [calc, setCalc] = useState('blend')
+
+  const calcOptions = [
+    { key: 'blend',     label: '🧬 Blend' },
+    { key: 'spray',     label: '💧 Spray Mix' },
+    { key: 'shortstop', label: '🌲 Shortstop' },
+    { key: 'phospho',   label: '🦫 PhosphoJet' },
+    { key: 'mnjet',     label: '🍂 Mn-Jet' },
+  ]
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-3 gap-1 p-1 glass rounded-xl">
+        {calcOptions.slice(0, 3).map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => setCalc(opt.key)}
+            className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+              calc === opt.key
+                ? 'bg-brand-green/20 text-brand-green border border-brand-green/30'
+                : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-1 p-1 glass rounded-xl -mt-3">
+        {calcOptions.slice(3).map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => setCalc(opt.key)}
+            className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+              calc === opt.key
+                ? 'bg-brand-green/20 text-brand-green border border-brand-green/30'
+                : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {calc === 'blend'     && <BlendCalc blends={blends} />}
+      {calc === 'spray'     && <SprayMixCalc products={products} />}
+      {calc === 'shortstop' && <ShortstopCalc />}
+      {calc === 'phospho'   && <PhosphoJetCalc />}
+      {calc === 'mnjet'     && <MnJetCalc />}
+    </div>
+  )
+}
+
+// --- Main View ---
 export default function MixRatesView() {
   const [blends, setBlends]     = useState([])
   const [products, setProducts] = useState([])
@@ -261,7 +507,6 @@ export default function MixRatesView() {
 
   return (
     <div className="min-h-screen bg-forest-950 max-w-lg mx-auto px-4 py-8 pb-16">
-      {/* Header */}
       <div className="flex items-center mb-5">
         <button onClick={() => navigate('/')} className="text-white/50 hover:text-white transition-colors text-sm flex-1 text-left">
           ← Back
@@ -274,11 +519,10 @@ export default function MixRatesView() {
         </div>
       </div>
 
-      {/* Tab Toggle */}
       <div className="flex gap-1 p-1 glass rounded-xl mb-6">
         {[
           { key: 'reference',  label: '📖 Reference' },
-          { key: 'calculator', label: '🧮 Calculator' },
+          { key: 'calculator', label: '🧭 Calculator' },
         ].map(tab => (
           <button
             key={tab.key}
