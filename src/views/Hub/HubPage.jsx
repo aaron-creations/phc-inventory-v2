@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { Package, Users, Truck, LogOut, Settings, LayoutDashboard } from 'lucide-react'
+import { Package, Settings, LayoutDashboard, LogOut } from 'lucide-react'
 
 export default function HubPage() {
   const { profile, signOut } = useAuth()
@@ -30,7 +30,8 @@ export default function HubPage() {
       </p>
 
       <div className="w-full max-w-sm grid grid-cols-1 gap-4">
-        {/* Field Operations App - All approved users */}
+
+        {/* Field Operations — All approved users */}
         <Link 
           to="/" 
           className="flex items-center p-6 bg-forest-900 border border-forest-800 rounded-2xl hover:bg-forest-800 hover:border-forest-700 transition-all group"
@@ -44,7 +45,7 @@ export default function HubPage() {
           </div>
         </Link>
 
-        {/* Manager View - Managers only */}
+        {/* Manager View — Managers only */}
         {isManager && (
           <Link 
             to="/manager" 
@@ -60,37 +61,7 @@ export default function HubPage() {
           </Link>
         )}
 
-        {/* CRM App - Managers only */}
-        {isManager && (
-          <Link 
-            to="/crm" 
-            className="flex items-center p-6 bg-forest-900 border border-forest-800 rounded-2xl hover:bg-forest-800 hover:border-forest-700 transition-all group"
-          >
-            <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center mr-5 group-hover:scale-110 transition-transform">
-              <Users size={24} />
-            </div>
-            <div>
-              <h2 className="text-white font-semibold text-lg mb-1">CRM</h2>
-              <p className="text-forest-300 text-sm">Customers, properties & jobs</p>
-            </div>
-          </Link>
-        )}
-
-        {/* Fleet App - All approved users */}
-        <Link 
-          to="/fleet" 
-          className="flex items-center p-6 bg-forest-900 border border-forest-800 rounded-2xl hover:bg-forest-800 hover:border-forest-700 transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center mr-5 group-hover:scale-110 transition-transform">
-            <Truck size={24} />
-          </div>
-          <div>
-            <h2 className="text-white font-semibold text-lg mb-1">Fleet</h2>
-            <p className="text-forest-300 text-sm">Equipment & maintenance</p>
-          </div>
-        </Link>
-
-        {/* Admin App - Managers only */}
+        {/* Administrative — Managers only */}
         {isManager && (
           <Link 
             to="/admin" 
@@ -105,6 +76,7 @@ export default function HubPage() {
             </div>
           </Link>
         )}
+
       </div>
     </div>
   )

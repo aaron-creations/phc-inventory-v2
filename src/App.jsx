@@ -13,9 +13,10 @@ import MyJobsView from './views/Jobs/MyJobsView'
 import StockView from './views/Stock/StockView'
 import MixRatesView from './views/MixRates/MixRatesView'
 import ManagerPanel from './views/Manager/ManagerPanel'
-import CRMShell from './views/CRM/CRMShell'
-import FleetShell from './views/Fleet/FleetShell'
 import AdminShell from './views/Admin/AdminShell'
+// CRM and Fleet are hidden — preserved for future re-enablement
+// import CRMShell from './views/CRM/CRMShell'
+// import FleetShell from './views/Fleet/FleetShell'
 
 export default function App() {
   return (
@@ -32,20 +33,22 @@ export default function App() {
           <Route path="/access-pending" element={<AccessPending />} />
 
           {/* Protected — any approved user (manager or technician) */}
-          <Route path="/hub"        element={<ProtectedRoute><HubPage /></ProtectedRoute>} />
-          <Route path="/"           element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/log"        element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
-          <Route path="/my-logs"    element={<ProtectedRoute><MyLogsView /></ProtectedRoute>} />
-          <Route path="/my-jobs"    element={<ProtectedRoute><MyJobsView /></ProtectedRoute>} />
-          <Route path="/stock"      element={<ProtectedRoute><StockView /></ProtectedRoute>} />
-          <Route path="/mix-rates"  element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
-          <Route path="/fleet/*"    element={<ManagerRoute><FleetShell /></ManagerRoute>} />
+          <Route path="/hub"       element={<ProtectedRoute><HubPage /></ProtectedRoute>} />
+          <Route path="/"          element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/log"       element={<ProtectedRoute><LoggingFlow /></ProtectedRoute>} />
+          <Route path="/my-logs"   element={<ProtectedRoute><MyLogsView /></ProtectedRoute>} />
+          <Route path="/my-jobs"   element={<ProtectedRoute><MyJobsView /></ProtectedRoute>} />
+          <Route path="/stock"     element={<ProtectedRoute><StockView /></ProtectedRoute>} />
+          <Route path="/mix-rates" element={<ProtectedRoute><MixRatesView /></ProtectedRoute>} />
 
           {/* Manager-only */}
           <Route path="/restock"   element={<ManagerRoute><RestockFlow /></ManagerRoute>} />
           <Route path="/manager/*" element={<ManagerRoute><ManagerPanel /></ManagerRoute>} />
-          <Route path="/crm/*"     element={<ManagerRoute><CRMShell /></ManagerRoute>} />
           <Route path="/admin/*"   element={<ManagerRoute><AdminShell /></ManagerRoute>} />
+
+          {/* Hidden modules — CRM & Fleet — re-enable when ready */}
+          {/* <Route path="/crm/*"  element={<ManagerRoute><CRMShell /></ManagerRoute>} /> */}
+          {/* <Route path="/fleet/*" element={<ManagerRoute><FleetShell /></ManagerRoute>} /> */}
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/hub" replace />} />
