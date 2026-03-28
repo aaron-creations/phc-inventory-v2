@@ -113,17 +113,9 @@ export default function BlendsSection() {
 }
 
 /**
- * Calculates cost per 100 gallons for one blend component.
- * Formula:
- *   cost_per_fl_oz = cost_per_container / (container_size converted to fl oz)
- *   cost_for_component = cost_per_fl_oz * rate_fl_oz_per_100_gal
- *
- * Container unit → fl oz conversion table:
- *   gal  = 128 fl oz
- *   qt   = 32  fl oz
- *   pint = 16  fl oz
- *   oz   = 1   fl oz (already fl oz)
- *   liter= 33.814 fl oz
+ * Cost per 100 gal calculation.
+ * cost_per_fl_oz = cost_per_container / (container_size converted to fl oz)
+ * cost_for_component = cost_per_fl_oz * rate_fl_oz_per_100_gal
  */
 const UNIT_TO_FL_OZ = { gal: 128, qt: 32, pint: 16, oz: 1, 'fl oz': 1, liter: 33.814 }
 
@@ -171,10 +163,11 @@ function CostBreakdownTable({ components = [], blendId, onChanged }) {
 
   async function handleAdd() {
     if (!form.product_id || !form.rate) return
+    // IMPORTANT: column is rate_fl_oz_per_100_gal (not amount_fl_oz_per_100_gal)
     await supabase.from('blend_components').insert({
       blend_id: blendId,
       product_id: form.product_id,
-      amount_fl_oz_per_100_gal: parseFloat(form.rate)
+      rate_fl_oz_per_100_gal: parseFloat(form.rate)
     })
     setForm({ product_id: '', rate: '' })
     onChanged()
@@ -277,7 +270,7 @@ function CostBreakdownTable({ components = [], blendId, onChanged }) {
   )
 }
 
-/* ─── Edit Blend Modal ────────────────────────────────── */
+/* --- Edit Blend Modal --- */
 function EditBlendModal({ blend, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: blend?.name || '',
@@ -375,18 +368,14 @@ function EditBlendModal({ blend, onClose, onSaved }) {
   )
 }
 
-/* ─── Delete Blend Modal ──────────────────────────────── */
+/* --- Delete Blend Modal --- */
 function DeleteBlendModal({ blend, onClose, onDeleted }) {
   const [deleting, setDeleting] = useState(false)
 
   async function handleDelete() {
     setDeleting(true)
-    // Dependencies (blend_components) will cascade if set in Supabase, 
-    // otherwise manual deletion is required. Assuming cascade for simplicity,
-    // but running component delete first just in case.
     await supabase.from('blend_components').delete().eq('blend_id', blend.id)
     await supabase.from('blends').delete().eq('id', blend.id)
-    
     onDeleted()
     onClose()
   }
