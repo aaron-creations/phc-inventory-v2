@@ -110,11 +110,47 @@ After ~1 minute your app will be live at a URL like: `https://phc-inventory-your
 2. Find your row and change the `role` column from `pending` to `manager`
 3. Save the row
 
-### Enable Google OAuth (Optional but Recommended)
+### Enable Google OAuth (Recommended)
 
-1. Supabase → **Authentication → Providers → Google**
-2. Follow the on-screen instructions to connect a Google Cloud Console app
-3. Add your Vercel domain to the allowed redirect URLs
+This allows your team to sign in with their Google accounts — no password required.
+
+#### Part A: Google Cloud Console
+
+1. Go to **https://console.cloud.google.com** and sign in with a Google account you control
+2. Click the project selector at the top → **New Project** → name it `PHC Inventory` → **Create**
+3. In the left sidebar go to **APIs & Services → OAuth consent screen**
+   - User Type: **External** → **Create**
+   - Fill in App name (`PHC Inventory`), your email for support, and your email under developer contact
+   - Click **Save and Continue** through the remaining screens (scopes and test users can be left blank)
+4. In the left sidebar go to **APIs & Services → Credentials**
+   - Click **+ Create Credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Name it `PHC Inventory Web`
+   - Under **Authorized redirect URIs**, add:
+     ```
+     https://jxydfmareguchcqelaiw.supabase.co/auth/v1/callback
+     ```
+     *(Replace `jxydfmareguchcqelaiw` with your own Supabase project ID if you created a new Supabase project)*
+   - Click **Create**
+5. Copy the **Client ID** and **Client Secret** that appear — you'll need them in the next step
+
+#### Part B: Connect to Supabase
+
+1. In your Supabase dashboard → **Authentication → Providers → Google**
+2. Toggle **Enable Google Provider** on
+3. Paste in your **Client ID** and **Client Secret** from Part A
+4. Click **Save**
+
+#### Part C: Add Your Domain to Supabase Redirect Allow-list
+
+1. In Supabase → **Authentication → URL Configuration**
+2. Under **Redirect URLs**, add your Vercel domain:
+   ```
+   https://your-app.vercel.app/**
+   ```
+3. Click **Save**
+
+> ✅ After this, the "Continue with Google" button on the login page will work. If users see a warning screen saying the app isn't verified, that's normal for an unverified Google app — they can click **Advanced → Go to PHC Inventory (unsafe)** to proceed. You can submit for Google verification later if desired.
 
 ---
 
