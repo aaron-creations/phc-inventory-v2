@@ -161,7 +161,6 @@ function BlendCalc({ blends }) {
 
 // --- Shortstop / Cambistat DBH Calculator ---
 // Formula: mL product = DBH^2 / 12
-// Water = (DBH * volPerInch) - product mL
 function ShortstopCalc() {
   const [dbh, setDbh] = useState('')
   const [volPerInch, setVolPerInch] = useState('20')
@@ -289,7 +288,10 @@ function MnJetCalc() {
   )
 }
 
-// --- Spray Mix Calculator (Mixed products / per-100-gal rate) ---
+// --- Spray Mix Calculator ---
+// BUG FIX: native <select> dropdowns render with the OS browser chrome (white background).
+// Using text-white on the <select> causes options to be invisible (white-on-white).
+// Fix: use bg-forest-900 for the select element and add bg-white + text-gray-900 to each <option>.
 function SprayMixCalc({ products }) {
   const mixedProducts = products.filter(p => p.unit_type === 'mixed' && p.mix_rate)
   const [selectedId, setSelectedId] = useState('')
@@ -326,11 +328,11 @@ function SprayMixCalc({ products }) {
           <select
             value={selectedId}
             onChange={e => setSelectedId(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-brand-green/50 transition-colors appearance-none"
+            className="w-full bg-forest-900 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-brand-green/50 transition-colors"
           >
-            <option value="">Select a mixed product…</option>
+            <option value="" className="bg-white text-gray-900">Select a mixed product…</option>
             {mixedProducts.map(p => (
-              <option key={p.id} value={p.id}>{p.name} ({p.mix_rate})</option>
+              <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.name} ({p.mix_rate})</option>
             ))}
           </select>
         </div>
