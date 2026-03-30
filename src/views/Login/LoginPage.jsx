@@ -48,15 +48,13 @@ export default function LoginPage() {
       setError(error.message)
     } else {
       setSuccessMsg('Request submitted! A manager will review your account.')
-      // Supabase auto-logs them in if email confirmations are disabled (which they might be).
-      // If logged in, the session starts, profile is pending, and they get routed to /access-pending.
     }
   }
 
   return (
     <div className="min-h-screen bg-forest-950 flex overflow-hidden">
 
-      {/* ── LEFT HERO PANEL (lg+) ─────────────────────────────────────────── */}
+      {/* ── LEFT HERO PANEL (lg+) ───────────────────────────────────────────── */}
       <div className="hidden lg:flex flex-1 flex-col justify-between p-12 relative overflow-hidden">
 
         {/* Radial glow */}
@@ -71,7 +69,7 @@ export default function LoginPage() {
           }}
         />
 
-        {/* Brand mark — logo only, text is in the badge */}
+        {/* Brand mark */}
         <div className="flex items-center gap-3 relative z-10">
           <img src="/phc-logo.png" alt="PHC" className="w-12 h-12" />
           <p className="text-white/40 text-xs">Systems</p>
@@ -90,13 +88,13 @@ export default function LoginPage() {
             <span className="text-brand-green">Track everything.</span>
           </h1>
           <p className="text-white/40 text-center text-base max-w-sm leading-relaxed">
-            The complete Plant Health Care operations platform — CRM, Fleet management, blend rates, technician logs, and real-time stock levels, all in one place.
+            The complete Plant Health Care operations platform — blend rates, technician logs, real-time stock levels, and manager analytics, all in one place.
           </p>
         </div>
 
         {/* Feature pills */}
         <div className="flex flex-wrap gap-2 relative z-10">
-          {['📦 Real-time Stock', '🧬 Blend Mix Rates', '👤 Tech Logging', '📊 Analytics', '🤝 CRM', '🚚 Fleet', '🔒 Role-Based Access'].map(f => (
+          {['📦 Real-time Stock', '🧬 Blend Mix Rates', '👤 Tech Logging', '📊 Analytics', '🔒 Role-Based Access'].map(f => (
             <span key={f} className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-white/40">
               {f}
             </span>
@@ -107,7 +105,7 @@ export default function LoginPage() {
       {/* ── RIGHT LOGIN PANEL ─────────────────────────────────────────────── */}
       <div className="w-full lg:w-[420px] flex-shrink-0 flex flex-col items-center justify-center px-8 py-12 relative bg-forest-900 lg:border-l lg:border-white/5">
 
-        {/* Mobile logo — badge is self-labelled */}
+        {/* Mobile logo */}
         <div className="flex lg:hidden flex-col items-center mb-10">
           <img src="/phc-logo.png" alt="PHC" className="w-28 h-28 mb-2" />
         </div>

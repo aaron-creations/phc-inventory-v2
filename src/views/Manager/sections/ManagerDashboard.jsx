@@ -2,58 +2,60 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient'
 import { format, startOfWeek } from 'date-fns'
-import { AlertTriangle, CheckCircle2, Clock, Users, TrendingUp, Calendar, PackageX, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Users, TrendingUp, Activity, PackageX, Zap } from 'lucide-react'
 
 export default function ManagerDashboard() {
-  const [kpis, setKpis] = useState({ lowStockCount: 0, todayJobs: 0, weekCost: 0, weekCompleted: 0 })
-  const [attention, setAttention] = useState({ lowStock: [], stuckJobs: [], pendingUsers: 0 })
+  const [kpis, setKpis] = useState({ lowStockCount: 0, weekTxCount: 0, weekCost: 0, activeTechs: 0 })
+  const [attention, setAttention] = useState({ lowStock: [], pendingUsers: 0 })
   const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
-      const today = format(new Date(), 'yyyy-MM-dd')
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
-      const [prodRes, todayJobsRes, weekTxRes, weekCompletedRes, stuckRes, pendingRes, activityRes] = await Promise.all([
+      const [prodRes, weekTxRes, pendingRes, activityRes, techRes] = await Promise.all([
+        // All products to find low/out stock
         supabase.from('products').select('id, name, containers_in_stock, low_stock_threshold'),
-        supabase.from('crm_jobs').select('id', { count: 'exact' })
-          .eq('scheduled_date', today).neq('status', 'cancelled'),
-        supabase.from('transactions').select('estimated_cost').gte('date', weekStart),
-        supabase.from('crm_jobs').select('id', { count: 'exact' })
-          .eq('status', 'completed').gte('scheduled_date', weekStart),
-        supabase.from('crm_jobs')
-          .select('id, service_type, scheduled_date, crm_customers(first_name, last_name), technicians(first_name, last_initial)')
-          .eq('status', 'in_progress').lt('scheduled_date', today),
+        // All transactions this week for cost + count
+        supabase.from('transactions').select('estimated_cost, technician_id').gte('date', weekStart),
+        // Pending users awaiting approval
         supabase.from('user_profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
+        // Recent activity (last 5 transactions)
         supabase.from('transactions')
           .select('*, products(name), blends(name), technicians(first_name, last_initial)')
           .order('date', { ascending: false }).limit(5),
+        // Active technicians
+        supabase.from('technicians').select('id', { count: 'exact' }),
       ])
 
       const products = prodRes.data || []
       const lowStock = products.filter(p => p.containers_in_stock <= p.low_stock_threshold)
-      const weekCost = (weekTxRes.data || []).reduce((s, t) => s + (t.estimated_cost || 0), 0)
+      const weekTxData = weekTxRes.data || []
+      const weekCost = weekTxData.reduce((s, t) => s + (t.estimated_cost || 0), 0)
+      const weekTxCount = weekTxData.length
+      const activeTechIds = new Set(weekTxData.filter(t => t.technician_id).map(t => t.technician_id))
 
       setKpis({
         lowStockCount: lowStock.length,
-        todayJobs: todayJobsRes.count || 0,
+        weekTxCount,
         weekCost,
-        weekCompleted: weekCompletedRes.count || 0,
+        activeTechs: activeTechIds.size,
       })
+
       setAttention({
         lowStock: lowStock.slice(0, 5),
-        stuckJobs: stuckRes.data || [],
         pendingUsers: pendingRes.count || 0,
       })
+
       setActivity(activityRes.data || [])
       setLoading(false)
     }
     load()
   }, [])
 
-  const hasAttentionItems = attention.lowStock.length > 0 || attention.stuckJobs.length > 0 || attention.pendingUsers > 0
+  const hasAttentionItems = attention.lowStock.length > 0 || attention.pendingUsers > 0
 
   function getTypeBadge(type) {
     const map = {
@@ -75,8 +77,9 @@ export default function ManagerDashboard() {
     <div className="p-6 max-w-4xl">
       <h2 className="text-white font-bold text-xl mb-6">Dashboard</h2>
 
-      {/* KPI Cards */}
+      {/* ── KPI Cards ────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Low / Out Stock */}
         <div
           onClick={() => navigate('/stock')}
           className={`glass rounded-xl p-4 cursor-pointer hover:bg-white/[0.07] transition-all group ${!loading && kpis.lowStockCount > 0 ? 'border border-red-500/20 bg-red-500/5' : ''}`}
@@ -93,17 +96,19 @@ export default function ManagerDashboard() {
           </p>
         </div>
 
+        {/* Transactions This Week */}
         <div className="glass rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
-            <Calendar size={14} className="text-blue-400" />
-            <p className="text-white/40 text-xs">Jobs Today</p>
+            <Activity size={14} className="text-blue-400" />
+            <p className="text-white/40 text-xs">Transactions This Week</p>
           </div>
           <p className="text-2xl font-bold text-blue-400">
-            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.todayJobs}
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.weekTxCount}
           </p>
           <p className="text-white/25 text-[10px] mt-1">{format(new Date(), 'EEEE, MMM d')}</p>
         </div>
 
+        {/* Cost This Week */}
         <div className="glass rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={14} className="text-brand-orange" />
@@ -115,19 +120,20 @@ export default function ManagerDashboard() {
           <p className="text-white/25 text-[10px] mt-1">Mon – today</p>
         </div>
 
+        {/* Active Technicians */}
         <div className="glass rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 size={14} className="text-brand-green" />
-            <p className="text-white/40 text-xs">Completed This Week</p>
+            <Users size={14} className="text-brand-green" />
+            <p className="text-white/40 text-xs">Active This Week</p>
           </div>
           <p className="text-2xl font-bold text-brand-green">
-            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.weekCompleted}
+            {loading ? <span className="inline-block w-12 h-6 bg-white/10 rounded animate-pulse" /> : kpis.activeTechs}
           </p>
-          <p className="text-white/25 text-[10px] mt-1">jobs finished</p>
+          <p className="text-white/25 text-[10px] mt-1">technicians logged</p>
         </div>
       </div>
 
-      {/* Needs Attention */}
+      {/* ── Needs Attention ────────────────────────────────────────────── */}
       <div className="mb-8">
         <h3 className="text-white/50 text-xs font-semibold tracking-widest uppercase mb-3 flex items-center gap-2">
           <Zap size={12} />
@@ -141,11 +147,13 @@ export default function ManagerDashboard() {
             <CheckCircle2 size={20} className="text-brand-green flex-shrink-0" />
             <div>
               <p className="text-brand-green font-semibold text-sm">All clear</p>
-              <p className="text-white/30 text-xs mt-0.5">No low stock, stuck jobs, or pending approvals.</p>
+              <p className="text-white/30 text-xs mt-0.5">No low stock or pending approvals.</p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
+
+            {/* Low Stock Items */}
             {attention.lowStock.length > 0 && (
               <div
                 onClick={() => navigate('/stock')}
@@ -164,22 +172,7 @@ export default function ManagerDashboard() {
               </div>
             )}
 
-            {attention.stuckJobs.length > 0 && (
-              <div className="glass rounded-xl p-4 flex items-start gap-3 border border-brand-orange/20 bg-brand-orange/[0.04]">
-                <Clock size={16} className="text-brand-orange flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-brand-orange font-semibold text-sm">
-                    {attention.stuckJobs.length} job{attention.stuckJobs.length !== 1 ? 's' : ''} still marked In Progress from a previous day
-                  </p>
-                  {attention.stuckJobs.slice(0, 2).map(j => (
-                    <p key={j.id} className="text-white/35 text-xs mt-0.5">
-                      {j.service_type} · {j.crm_customers ? `${j.crm_customers.first_name} ${j.crm_customers.last_name}` : 'Unknown'} · {format(new Date(j.scheduled_date + 'T12:00:00'), 'MMM d')}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            {/* Pending Users */}
             {attention.pendingUsers > 0 && (
               <div
                 onClick={() => navigate('/manager/users')}
@@ -195,11 +188,12 @@ export default function ManagerDashboard() {
                 <span className="text-blue-400/50 group-hover:text-blue-400 transition-colors text-sm flex-shrink-0">→</span>
               </div>
             )}
+
           </div>
         )}
       </div>
 
-      {/* Quick Actions */}
+      {/* ── Quick Actions ────────────────────────────────────────────── */}
       <div className="flex gap-3 mb-8">
         <button
           onClick={() => navigate('/manager/inventory')}
@@ -215,7 +209,7 @@ export default function ManagerDashboard() {
         </button>
       </div>
 
-      {/* Recent Activity (last 5) */}
+      {/* ── Recent Activity (last 5) ────────────────────────────── */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-white/50 text-xs font-semibold tracking-widest uppercase">Recent Activity</h3>
         <button
