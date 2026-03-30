@@ -69,6 +69,185 @@ function exportCSV(products) {
   URL.revokeObjectURL(url)
 }
 
+/* ─── CSV Import Modal ────────────────────────────────────────────────────────
+   Accepts a CSV file that matches the export format (first column = Product Name,
+   fourth column = Containers in Stock). Matches rows by name, updates stock only.
+   New products found in CSV are skipped — use Add Product for those.
+───────────────────────────────────────────────────────────────────────────── */
+function ImportModal({ existingProducts, onClose, onImported }) {
+  const [rows, setRows] = useState(null)   // parsed preview rows
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState(null)
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = evt => {
+      try {
+        const text = evt.target.result
+        const lines = text.split('\n').filter(l => l.trim())
+        if (lines.length < 2) { setError('CSV is empty or has no data rows.'); return }
+        // Strip quotes helper
+        const unquote = s => s.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+        // Skip header row
+        const dataLines = lines.slice(1)
+        const parsed = dataLines.map(line => {
+          // Naive CSV split (handles quoted commas)
+          const cols = []
+          let inQ = false, cur = ''
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i]
+            if (ch === '"') { inQ = !inQ; continue }
+            if (ch === ',' && !inQ) { cols.push(cur); cur = '' }
+            else cur += ch
+          }
+          cols.push(cur)
+          const name = unquote(cols[0] || '')
+          const containers = parseFloat(unquote(cols[3] || '')) // 4th col = Containers
+          return { name, containers }
+        }).filter(r => r.name && !isNaN(r.containers) && r.containers >= 0)
+
+        if (parsed.length === 0) { setError('No valid rows found. Check column format.'); return }
+
+        // Cross-reference against existing products
+        const enriched = parsed.map(r => {
+          const match = existingProducts.find(p => p.name.toLowerCase() === r.name.toLowerCase())
+          return { ...r, match, status: match ? 'update' : 'skip' }
+        })
+        setError(null)
+        setRows(enriched)
+      } catch (ex) {
+        setError('Failed to parse CSV: ' + ex.message)
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  async function handleImport() {
+    const toUpdate = rows.filter(r => r.status === 'update')
+    if (!toUpdate.length) return
+    setSaving(true)
+    let ok = 0, fail = 0
+    for (const row of toUpdate) {
+      const { error } = await supabase
+        .from('products')
+        .update({ containers_in_stock: row.containers })
+        .eq('id', row.match.id)
+      error ? fail++ : ok++
+    }
+    setSaving(false)
+    setSaveResult({ ok, fail })
+    onImported()
+  }
+
+  const updateCount = rows?.filter(r => r.status === 'update').length ?? 0
+  const skipCount   = rows?.filter(r => r.status === 'skip').length ?? 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-forest-900 border border-white/10 rounded-2xl p-6 z-10 mx-auto max-h-[85vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-white font-bold text-lg">⬆ Import Inventory CSV</h2>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">×</button>
+        </div>
+
+        {!saveResult ? (
+          <>
+            <p className="text-white/50 text-xs mb-4 leading-relaxed">
+              Upload a CSV in the same format as the export. The import will match rows by
+              <span className="text-white/80 font-semibold"> Product Name</span> and update
+              the <span className="text-white/80 font-semibold">Containers in Stock</span> value only.{' '}
+              Unmatched product names are skipped — no new products are created.
+            </p>
+
+            <label className="block w-full border-2 border-dashed border-white/20 rounded-xl p-6 text-center cursor-pointer hover:border-brand-green/40 transition-colors mb-4">
+              <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+              <div className="text-3xl mb-2">📂</div>
+              <p className="text-white/60 text-sm">Click to choose a CSV file</p>
+              <p className="text-white/25 text-xs mt-1">Matching the PHC Inventory export format</p>
+            </label>
+
+            {error && <p className="text-red-400 text-xs mb-3 p-3 bg-red-500/10 rounded-lg border border-red-500/20">{error}</p>}
+
+            {rows && (
+              <>
+                <div className="flex gap-3 mb-3">
+                  <div className="flex-1 text-center glass rounded-xl py-3">
+                    <div className="text-brand-green font-bold text-2xl">{updateCount}</div>
+                    <div className="text-white/40 text-xs mt-0.5">Will Update</div>
+                  </div>
+                  <div className="flex-1 text-center glass rounded-xl py-3">
+                    <div className="text-white/40 font-bold text-2xl">{skipCount}</div>
+                    <div className="text-white/40 text-xs mt-0.5">Not Found / Skip</div>
+                  </div>
+                </div>
+
+                <div className="glass rounded-xl overflow-hidden mb-4 max-h-52 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-white/5 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-2 text-white/40 font-semibold">Product</th>
+                        <th className="text-right px-3 py-2 text-white/40 font-semibold">New Stock</th>
+                        <th className="text-right px-3 py-2 text-white/40 font-semibold">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {rows.map((r, i) => (
+                        <tr key={i} className={r.status === 'skip' ? 'opacity-40' : ''}>
+                          <td className="px-3 py-2 text-white/80">{r.name}</td>
+                          <td className="px-3 py-2 text-right font-mono text-white/60">{r.containers}</td>
+                          <td className="px-3 py-2 text-right">
+                            <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                              r.status === 'update'
+                                ? 'bg-brand-green/15 text-brand-green'
+                                : 'bg-white/5 text-white/30'
+                            }`}>
+                              {r.status === 'update' ? '✓ Update' : '— Skip'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleImport}
+                    disabled={saving || updateCount === 0}
+                    className="flex-1 py-2.5 rounded-xl bg-brand-green text-forest-950 font-bold text-sm transition-all disabled:opacity-40"
+                  >
+                    {saving ? 'Importing…' : `Import ${updateCount} Product${updateCount !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-6">
+            <div className="text-5xl mb-4">{saveResult.fail === 0 ? '✅' : '⚠️'}</div>
+            <p className="text-white font-bold text-lg mb-1">
+              {saveResult.ok} product{saveResult.ok !== 1 ? 's' : ''} updated
+            </p>
+            {saveResult.fail > 0 && (
+              <p className="text-red-400 text-sm mb-4">{saveResult.fail} failed to update — check console.</p>
+            )}
+            <button onClick={onClose} className="mt-4 px-6 py-2 rounded-xl bg-brand-green text-forest-950 font-bold text-sm">
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ─── Product Modal ──────────────────────────────────────── */
 function ProductModal({ product, onClose, onSaved }) {
   const isNew = !product
@@ -387,6 +566,7 @@ export default function InventorySection() {
   
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [showImport, setShowImport] = useState(false)
 
   const loadProducts = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name')
@@ -488,6 +668,12 @@ export default function InventorySection() {
             className="text-white/50 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-xs font-medium flex items-center gap-1.5"
           >
             ⬇ Export CSV
+          </button>
+          <button
+            onClick={() => setShowImport(true)}
+            className="text-white/50 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-xs font-medium flex items-center gap-1.5 border border-white/10 hover:border-white/20"
+          >
+            ⬆ Import CSV
           </button>
           <button
             onClick={() => setEditTarget({ isNew: true })}
@@ -636,6 +822,13 @@ export default function InventorySection() {
       )}
       {deleteTarget && (
         <DeleteModal product={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={loadProducts} />
+      )}
+      {showImport && (
+        <ImportModal
+          existingProducts={products}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); loadProducts() }}
+        />
       )}
     </div>
   )
